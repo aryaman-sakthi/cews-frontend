@@ -7,18 +7,34 @@ import { ConversionChart } from '@/components/CurrencyDashboard/ConversionChart'
 import { MarketNews } from '@/components/CurrencyDashboard/MarketNews';
 import { PredictedRate } from '@/components/CurrencyDashboard/PredictedRate';
 import { AlertSubscription } from '@/components/CurrencyDashboard/AlertSubscription';
+import { fetchCurrentRate } from '@/lib/api';
 
 export default function Home() {
   const [amount, setAmount] = useState(1000);
-  
-  // Sample data - replace with real data from API
-  const data = {
+  const [rateData, setRateData] = useState({
     from: 'USD',
     to: 'AUD',
-    rate: 1.58692,
-    amount: amount,
-    convertedAmount: amount * 1.58692,
+    rate: 0,
+    amount: 1000,
+    convertedAmount: 0
+  });
+  
+  // Sample data - replace with real data from API
+  const getRates = async () => {
+    try {
+      const data = await fetchCurrentRate('USD', 'AUD');
+      setRateData({
+        from: data.from,
+        to: data.to,
+        rate: data.rate,
+        amount: amount,
+        convertedAmount: amount * data.rate
+      });
+    } catch (error) {
+      console.error('Error:', error);
+    }
   };
+  console.log("please")
 
   const chartData = [
     { date: 'Nov 1', value: 52 },
