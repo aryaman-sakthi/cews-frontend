@@ -6,6 +6,7 @@ import { CurrencyConverter } from '@/components/CurrencyDashboard/CurrencyConver
 import { ConversionChart } from '@/components/CurrencyDashboard/ConversionChart';
 import { MarketNews } from '@/components/CurrencyDashboard/MarketNews';
 import { PredictedRate } from '@/components/CurrencyDashboard/PredictedRate';
+import { AlertSubscription } from '@/components/CurrencyDashboard/AlertSubscription';
 
 export default function Home() {
   const [amount, setAmount] = useState(1000);
@@ -56,6 +57,9 @@ export default function Home() {
             <PredictedRate prediction={prediction} />
           </div>
         </div>
+        
+        {/* Add the AlertSubscription component */}
+        <AlertSubscription />
       </div>
     </main>
   );
