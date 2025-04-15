@@ -5,6 +5,7 @@ export interface CurrencyRate {
   rate: number;
   amount: number;
   convertedAmount: number;
+  lastUpdated?: Date | null;
 }
 
 export interface NewsItem {
