@@ -1,6 +1,6 @@
 // src/components/CurrencyDashboard/AlertSubscription.tsx
 'use client';
-
+ 
 import React, { useState } from 'react';
 
 export const AlertSubscription = () => {
