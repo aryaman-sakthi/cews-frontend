@@ -1,103 +1,148 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { CurrencyConverter } from '@/components/CurrencyDashboard/CurrencyConverter';
+import { ConversionChart } from '@/components/CurrencyDashboard/ConversionChart';
+import { MarketNews } from '@/components/CurrencyDashboard/MarketNews';
+import { PredictedRate } from '@/components/CurrencyDashboard/PredictedRate';
+import { AlertSubscription } from '@/components/CurrencyDashboard/AlertSubscription';
+import { fetchExchangeRate } from '@/lib/api';
+import { supportedCurrencies } from '@/utils/currencyData';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [amount, setAmount] = useState(1000);
+  const [fromCurrency, setFromCurrency] = useState('USD');
+  const [toCurrency, setToCurrency] = useState('AUD');
+  const [rate, setRate] = useState(0); // Start with 0, will be populated from API
+  const [isLoading, setIsLoading] = useState(true); // Start with loading state
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Fetch exchange rate when currencies change or on initial load
+  useEffect(() => {
+    const getExchangeRate = async () => {
+      setIsLoading(true);
+      setError(null); // Clear any previous errors
+      
+      try {
+        console.log(`Fetching rate for ${fromCurrency} to ${toCurrency}...`);
+        const newRate = await fetchExchangeRate(fromCurrency, toCurrency);
+        console.log(`Received rate: ${newRate}`);
+        
+        setRate(newRate);
+        setLastUpdated(new Date());
+      } catch (error) {
+        console.error('Error fetching exchange rate:', error);
+        setError(`Failed to fetch exchange rate. Please try again later.`);
+        // Keep the previous rate if available
+        if (rate === 0) {
+          setRate(1.0); // Default for UI to avoid division by zero
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    // Call the function to fetch the exchange rate
+    getExchangeRate();
+    
+    // Also set up a refresh interval (every 60 seconds)
+    const intervalId = setInterval(getExchangeRate, 60000);
+    
+    // Clean up the interval on component unmount
+    return () => clearInterval(intervalId);
+  }, [fromCurrency, toCurrency]);
+  
+  // Data structure with dynamic values from the API
+  const data = {
+    from: fromCurrency,
+    to: toCurrency,
+    rate: rate,
+    amount: amount,
+    convertedAmount: amount * rate,
+    lastUpdated: lastUpdated,
+  };
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Sample chart data that would be updated based on historical rates
+  const chartData = [
+    { date: 'Nov 1', value: rate * 0.95 }, // Simulate historical data based on current rate
+    { date: 'Nov 15', value: rate * 0.97 },
+    { date: 'Nov 30', value: rate },
+  ];
+
+  const news = [
+    {
+      id: '1',
+      title: `${fromCurrency}/${toCurrency} Market Update`,
+      imageUrl: '/news/1.jpg',
+    },
+    // Add more news items
+  ];
+
+  const prediction = {
+    day: 3,
+    rate: rate * 1.05, // Example: 5% higher rate prediction
+    change: 5.0,
+    confidence: 82.5,
+  };
+
+  const handleFromCurrencyChange = (currency: string) => {
+    if (currency === toCurrency) {
+      setToCurrency(fromCurrency); // Swap currencies if same one is selected
+    }
+    setFromCurrency(currency);
+  };
+
+  const handleToCurrencyChange = (currency: string) => {
+    if (currency === fromCurrency) {
+      setFromCurrency(toCurrency); // Swap currencies if same one is selected
+    }
+    setToCurrency(currency);
+  };
+
+  return (
+    <main className="min-h-screen bg-[#1a1a2e] p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <div className="bg-[#2a2a40] rounded-2xl p-6">
+              {isLoading ? (
+                <div className="flex justify-center items-center p-6">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+                </div>
+              ) : (
+                <>
+                  {error && (
+                    <div className="bg-red-900/30 text-red-200 p-3 mb-4 rounded-lg text-sm">
+                      {error}
+                    </div>
+                  )}
+                  <CurrencyConverter 
+                    data={data} 
+                    onAmountChange={setAmount} 
+                    onFromCurrencyChange={handleFromCurrencyChange}
+                    onToCurrencyChange={handleToCurrencyChange}
+                    currencies={supportedCurrencies}
+                  />
+                </>
+              )}
+              <ConversionChart 
+                data={chartData} 
+                rate={rate} 
+                fromCurrency={fromCurrency}
+                toCurrency={toCurrency}
+              />
+            </div>
+          </div>
+          <div className="lg:col-span-1 space-y-6">
+            <MarketNews news={news} />
+            <PredictedRate prediction={prediction} />
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        
+        <AlertSubscription />
+      </div>
+    </main>
   );
 }
