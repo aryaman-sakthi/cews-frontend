@@ -1,4 +1,3 @@
-// src/app/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -136,12 +135,19 @@ export default function Home() {
             </div>
           </div>
           <div className="lg:col-span-1 space-y-6">
-            <MarketNews news={news} />
+            <MarketNews 
+              fromCurrency={fromCurrency} 
+              toCurrency={toCurrency} 
+            />
             <PredictedRate prediction={prediction} />
           </div>
         </div>
         
-        <AlertSubscription />
+        <AlertSubscription 
+          fromCurrency={fromCurrency}
+          toCurrency={toCurrency}
+          currentRate={rate}
+        />
       </div>
     </main>
   );
