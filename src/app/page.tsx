@@ -53,7 +53,7 @@ export default function Home() {
     
     // Clean up the interval on component unmount
     return () => clearInterval(intervalId);
-  }, [fromCurrency, toCurrency]);
+  }, [fromCurrency, toCurrency, rate]);
   
   // Data structure with dynamic values from the API
   const data = {
