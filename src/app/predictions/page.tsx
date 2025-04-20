@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -7,7 +8,7 @@ import { VolatilityAnalysis } from '@/components/PredictionDashboard/VolatilityA
 import { CorrelationHeatmap } from '@/components/PredictionDashboard/CorrelationHeatmap';
 import { AnomalyDetectionChart } from '@/components/PredictionDashboard/AnomalyDetectionChart';
 import { ConfidenceScoreTile } from '@/components/PredictionDashboard/ConfidenceScoreTile';
-import { createScrollObserver, scrollToElement } from '@/utils/scrollUtils';
+import { scrollToElement } from '@/utils/scrollUtils';
 import { 
   fetchCurrencyPrediction, 
   fetchVolatilityAnalysis,
@@ -197,21 +198,24 @@ export default function PredictionsPage() {
   
   // Setup scroll observation
   useEffect(() => {
-    const observer = createScrollObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.target === lowerSectionRef.current && entry.isIntersecting) {
-          setShowLowerSection(true);
-        }
+    // Set up the Intersection Observer
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        setShowLowerSection(entry.isIntersecting);
       });
-    }, 0.1);
+    }, { threshold: 0.1 });
     
+    // Start observing
     if (lowerSectionRef.current) {
-      observer.observe(lowerSectionRef.current);
+      const currentRef = lowerSectionRef.current;
+      observer.observe(currentRef);
     }
     
     return () => {
-      if (lowerSectionRef.current) {
-        observer.unobserve(lowerSectionRef.current);
+      // Save a reference to the current value for cleanup
+      const currentRef = lowerSectionRef.current;
+      if (currentRef) {
+        observer.unobserve(currentRef);
       }
     };
   }, []);
