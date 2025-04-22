@@ -2,7 +2,6 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
 import { CurrencyRate } from '@/types/currency';
 import { formatCurrency } from '@/utils/formatters';
 import { Currency } from '@/utils/currencyData';
