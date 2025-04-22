@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const forecastHorizon = searchParams.get('forecast_horizon');
   const model = searchParams.get('model');
   const confidence = searchParams.get('confidence');
+  const backtest = searchParams.get('backtest') === 'true';
 
   // Build query parameters for the backend
   const apiParams = new URLSearchParams();
@@ -25,6 +26,9 @@ export async function GET(request: NextRequest) {
   }
   if (confidence) {
     apiParams.append('confidence', confidence);
+  }
+  if (backtest) {
+    apiParams.append('backtest', 'true');
   }
   
   // Add timestamp to prevent caching
