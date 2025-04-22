@@ -80,8 +80,8 @@ export const AlertSubscription: React.FC<AlertSubscriptionProps> = ({
         Waiting on a better rate?
       </h2>
       <p className="text-gray-300 mb-8 max-w-2xl mx-auto">
-        Set an alert now, and we'll tell you when it gets better. And with our daily summaries,
-        you'll never miss out on the latest news.
+        Set an alert now, and we&apos;ll tell you when it gets better. And with our daily summaries,
+        you&apos;ll never miss out on the latest news.
       </p>
       
       <form onSubmit={handleSubmit} className="max-w-xl mx-auto space-y-4">
