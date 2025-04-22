@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // Configure API URL - can be overridden with environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 // Flag to enable mock data when backend is not available
 const USE_MOCK_DATA = true; // Set to false when backend is ready
@@ -73,6 +73,13 @@ export interface CurrencyPrediction {
   meanSquareError?: number;
   rootMeanSquareError?: number;
   meanAbsoluteError?: number;
+}
+interface HistoricalDataPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
 }
 
 // New interface for Volatility Analysis
@@ -524,3 +531,63 @@ export const fetchAnomalyDetection = async (
     throw error;
   }
 }; 
+
+export const fetchHistoricalExchangeRate = async (
+  fromCurrency: string,
+  toCurrency: string
+): Promise<HistoricalDataPoint[]> => {
+  try {
+    const url = `${API_BASE_URL}/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const response = await axios.post(url);
+    console.log(response);
+
+
+    // Ensure the data is available
+    const timeSeriesData = response.data?.event?.[0]?.attributes?.data;
+
+    if (!timeSeriesData) {
+      throw new Error('Invalid data format received from API');
+    }
+
+    // Map and format the data to HistoricalDataPoint array
+    const formattedData: HistoricalDataPoint[] = timeSeriesData.map(
+      (entry: { date: string; open: number; high: number; low: number; close: number }) => ({
+        date: entry.date,
+        open: entry.open,
+        high: entry.high,
+        low: entry.low,
+        close: entry.close,
+      })
+    );
+    
+
+    // Sort chronologically (oldest to newest)
+    formattedData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return formattedData;
+  } catch (error) {
+    console.error('Error fetching historical data:', error);
+
+    // Optional: Return mock data for dev fallback
+    if (USE_MOCK_DATA) {
+      console.log('Using mock historical data');
+      const now = new Date();
+      const mockData: HistoricalDataPoint[] = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        return {
+          date: date.toISOString().split('T')[0],
+          open: 1.0 + i * 0.01,
+          high: 1.01 + i * 0.01,
+          low: 0.99 + i * 0.01,
+          close: 1.0 + i * 0.01,
+        };
+      }).reverse();
+
+      return mockData;
+    }
+
+    throw error;
+  }
+};
+
