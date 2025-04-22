@@ -25,10 +25,13 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
   const [hoveredFactor, setHoveredFactor] = useState<string | null>(null);
   const [isSingleColumnHeatmap, setSingleColumnHeatmap] = useState(false);
 
-  // Initialize data only on the client side to avoid hydration mismatch
+  // Client-side initialization - runs only once
   useEffect(() => {
     setIsClient(true);
-    
+  }, []);
+
+  // Handle data and column configuration changes
+  useEffect(() => {
     // Check if this is a single column heatmap (correlation with exchange rate)
     setSingleColumnHeatmap(colLabels.length === 1);
     
@@ -36,7 +39,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
     if (initialData && initialData.length > 0) {
       setData(initialData);
     } else {
-      // Otherwise generate sample data
+      // Generate sample data
       const newData: HeatmapCell[] = [];
       
       // If single column (exchange rate correlations), create correlation values for each factor
@@ -88,6 +91,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
   
   // Format the correlation value for display
   const formatCorrelationValue = (value: number): string => {
+    if (value === undefined || value === null) return '0.00';
     if (value === 1) return '1.0';
     return value.toFixed(2);
   };
@@ -145,7 +149,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
         
         {/* Bar chart visualization */}
         <div className="space-y-4">
-          {sortedFactors.map(factor => {
+          {sortedFactors.map((factor, factorIndex) => {
             const value = getCellValue(factor, colLabels[0]);
             const isPositive = value >= 0;
             const barWidth = Math.abs(value) * 100; // percent of full width
@@ -153,7 +157,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
             
             return (
               <div 
-                key={factor} 
+                key={`factor-${factorIndex}-${factor}`} 
                 className={`p-4 rounded-lg ${isHighlighted ? 'bg-[#1e1e30]' : 'bg-[#232335]'} transition-colors`}
                 onMouseEnter={() => handleFactorHover(factor)}
                 onMouseLeave={handleFactorLeave}
@@ -167,21 +171,21 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
                 
                 <div className="h-6 w-full bg-gray-800 rounded-full overflow-hidden flex">
                   {isPositive ? (
-                    <>
+                    <div className="flex w-full">
                       <div className="w-1/2"></div>
                       <div 
                         className={`h-full ${getColorForValue(value)}`} 
                         style={{ width: `${barWidth / 2}%` }}
                       ></div>
-                    </>
+                    </div>
                   ) : (
-                    <>
+                    <div className="flex w-full">
                       <div 
                         className={`h-full ${getColorForValue(value)} ml-auto`} 
                         style={{ width: `${barWidth / 2}%` }}
                       ></div>
                       <div className="w-1/2"></div>
-                    </>
+                    </div>
                   )}
                 </div>
                 
@@ -225,7 +229,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
           <div className="flex mb-2">
             <div className="w-24 flex-shrink-0"></div> {/* Empty corner cell */}
             {colLabels.map((col, i) => (
-              <div key={i} className="w-20 text-xs text-gray-400 text-center transform -rotate-45 origin-bottom-left translate-y-4">
+              <div key={`col-${col}-${i}`} className="w-20 text-xs text-gray-400 text-center transform -rotate-45 origin-bottom-left translate-y-4">
                 {col}
               </div>
             ))}
@@ -233,7 +237,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
           
           {/* Data rows */}
           {rowLabels.map((row, rowIndex) => (
-            <div key={rowIndex} className="flex mb-1">
+            <div key={`row-${row}-${rowIndex}`} className="flex mb-1">
               <div className="w-24 flex-shrink-0 text-sm text-gray-400 pr-2 flex items-center justify-end">
                 {row}
               </div>
@@ -242,7 +246,7 @@ export const CorrelationHeatmap: React.FC<CorrelationHeatmapProps> = ({
                 const value = getCellValue(row, col);
                 return (
                   <div 
-                    key={colIndex} 
+                    key={`cell-${row}-${col}-${colIndex}`} 
                     className={`w-20 h-12 flex items-center justify-center transition-all duration-200 ${getColorForValue(value)}`}
                   >
                     <span className="text-xs text-white font-medium">

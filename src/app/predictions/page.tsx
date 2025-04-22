@@ -6,7 +6,6 @@ import { PredictionRateCard } from '@/components/PredictionDashboard/PredictionR
 import { VolatilityAnalysis } from '@/components/PredictionDashboard/VolatilityAnalysis';
 import { CorrelationHeatmap } from '@/components/PredictionDashboard/CorrelationHeatmap';
 import { AnomalyDetectionChart } from '@/components/PredictionDashboard/AnomalyDetectionChart';
-import { ConfidenceScoreTile } from '@/components/PredictionDashboard/ConfidenceScoreTile';
 import { createScrollObserver, scrollToElement } from '@/utils/scrollUtils';
 import { 
   fetchCurrencyPrediction, 
@@ -31,6 +30,7 @@ const CURRENCIES = [
   { code: 'CAD', name: 'Canadian Dollar', flag: '🇨🇦' },
   { code: 'CHF', name: 'Swiss Franc', flag: '🇨🇭' },
   { code: 'CNY', name: 'Chinese Yuan', flag: '🇨🇳' },
+  { code: 'INR', name: 'Indian Rupee', flag: '🇮🇳' },
   { code: 'HKD', name: 'Hong Kong Dollar', flag: '🇭🇰' },
   { code: 'SGD', name: 'Singapore Dollar', flag: '🇸🇬' },
 ];
@@ -49,19 +49,14 @@ export default function PredictionsPage() {
   // Currency selection state
   const [baseCurrency, setBaseCurrency] = useState('USD');
   const [targetCurrency, setTargetCurrency] = useState('AUD');
-  const [amount, setAmount] = useState(1000);
-  const [showBaseCurrencyDropdown, setShowBaseCurrencyDropdown] = useState(false);
+  const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [showTargetCurrencyDropdown, setShowTargetCurrencyDropdown] = useState(false);
+  const [amount, setAmount] = useState(1);
   
   // Prediction data state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prediction, setPrediction] = useState<CurrencyPrediction | null>(null);
-  
-  // Volatility analysis state
-  const [volatilityAnalysis, setVolatilityAnalysis] = useState<VolatilityAnalysisData | null>(null);
-  const [volatilityLoading, setVolatilityLoading] = useState(false);
-  const [volatilityError, setVolatilityError] = useState<string | null>(null);
   
   // Correlation analysis state
   const [correlationAnalysis, setCorrelationAnalysis] = useState<CorrelationAnalysis | null>(null);
@@ -72,6 +67,11 @@ export default function PredictionsPage() {
   const [anomalyData, setAnomalyData] = useState<AnomalyDetectionResult | null>(null);
   const [anomalyLoading, setAnomalyLoading] = useState(false);
   const [anomalyError, setAnomalyError] = useState<string | null>(null);
+  
+  // Volatility analysis state
+  const [volatilityAnalysis, setVolatilityAnalysis] = useState<VolatilityAnalysisData | null>(null);
+  const [volatilityLoading, setVolatilityLoading] = useState(false);
+  const [volatilityError, setVolatilityError] = useState<string | null>(null);
   
   // Load prediction data when currencies change
   useEffect(() => {
@@ -85,13 +85,19 @@ export default function PredictionsPage() {
         const result = await fetchCurrencyPrediction(baseCurrency, targetCurrency, {
           forecastHorizon: 7,
           model: 'auto',
-          confidence: 80
+          refresh: true
         });
+        
+        // Force confidence score to be a number
+        result.confidenceScore = Number(result.confidenceScore);
+        
+        console.log(`Page component: Received prediction with confidence score: ${result.confidenceScore} (type: ${typeof result.confidenceScore})`);
         
         setPrediction(result);
       } catch (err) {
         console.error('Error fetching prediction:', err);
-        setError('Failed to load prediction data. Please try again.');
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -124,6 +130,8 @@ export default function PredictionsPage() {
   
   // Load correlation analysis data when currencies change
   useEffect(() => {
+    const mounted = { current: true };
+    
     const loadCorrelationData = async () => {
       if (baseCurrency === targetCurrency) return;
       
@@ -132,20 +140,56 @@ export default function PredictionsPage() {
       
       try {
         const result = await fetchCorrelationAnalysis(baseCurrency, targetCurrency);
+        
+        // Prevent state updates if component unmounted
+        if (!mounted.current) return;
+        
+        // Our improved fetchCorrelationAnalysis now always returns a valid structure
+        // but we should still check if we actually have any factors to display
+        if (!result.influencingFactors || result.influencingFactors.length === 0) {
+          console.log('No correlation factors found for this currency pair');
+          
+          // Set the empty data to state with no error message 
+          // (the UI will display an informative message based on the empty factors)
+          setCorrelationAnalysis(result);
+          setCorrelationError(null);
+          setCorrelationLoading(false);
+          return;
+        }
+        
+        // Valid data with factors, update state
         setCorrelationAnalysis(result);
+        setCorrelationError(null);
       } catch (err) {
-        console.error('Error fetching correlation analysis:', err);
-        setCorrelationError('Failed to load correlation data. Please try again.');
+        // This should rarely happen now since our API functions handle errors internally
+        // But just in case, we'll handle any unexpected errors
+        
+        // Prevent state updates if component unmounted
+        if (!mounted.current) return;
+        
+        console.error('Unexpected error in correlation data loading:', err);
+        
+        setCorrelationError('Failed to load correlation data. Please try again later.');
       } finally {
-        setCorrelationLoading(false);
+        // Prevent state updates if component unmounted
+        if (mounted.current) {
+          setCorrelationLoading(false);
+        }
       }
     };
     
     loadCorrelationData();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      mounted.current = false;
+    };
   }, [baseCurrency, targetCurrency]);
   
   // Load anomaly detection data when currencies change
   useEffect(() => {
+    const mounted = { current: true };
+    
     const loadAnomalyData = async () => {
       if (baseCurrency === targetCurrency) return;
       
@@ -153,28 +197,62 @@ export default function PredictionsPage() {
       setAnomalyError(null);
       
       try {
-        const result = await fetchAnomalyDetection(baseCurrency, targetCurrency, 30);
+        // Our improved fetchAnomalyDetection function now always returns a valid data structure 
+        // even if the API call fails, so we can just use the result directly without try/catch
+        // Use 90 days instead of 30 to increase chance of finding anomalies
+        const result = await fetchAnomalyDetection(baseCurrency, targetCurrency, 90);
+        console.log("Loaded anomaly data:", result);
+        
+        // Prevent state updates if component unmounted
+        if (!mounted.current) return;
+        
+        // Set the data - either real data or a fallback structure
         setAnomalyData(result);
+        setAnomalyError(null);
       } catch (err) {
-        console.error('Error fetching anomaly detection:', err);
-        setAnomalyError('Failed to load anomaly detection data. Please try again.');
+        // This should rarely happen now since fetchAnomalyDetection handles errors internally
+        // But just in case there's some unexpected error:
+        
+        // Prevent state updates if component unmounted
+        if (!mounted.current) return;
+        
+        console.error('Unexpected error in anomaly data loading:', err);
+        setAnomalyError('Failed to load anomaly data. Please try again later.');
       } finally {
-        setAnomalyLoading(false);
+        // Prevent state updates if component unmounted
+        if (mounted.current) {
+          setAnomalyLoading(false);
+        }
       }
     };
     
     loadAnomalyData();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      mounted.current = false;
+    };
   }, [baseCurrency, targetCurrency]);
   
   // Prepare correlation data for the heatmap
   const prepareCorrelationHeatmapData = () => {
-    if (!correlationAnalysis) return { data: [], rowLabels: defaultFactors, colLabels: ['Exchange Rate'] };
+    // Default empty state
+    if (!correlationAnalysis || !correlationAnalysis.influencingFactors || !Array.isArray(correlationAnalysis.influencingFactors)) {
+      return { data: [], rowLabels: defaultFactors, colLabels: ['Exchange Rate'] };
+    }
     
     // Extract factors from the correlation analysis
-    const factors = correlationAnalysis.influencingFactors;
+    const factors = correlationAnalysis.influencingFactors.filter(factor => 
+      factor && typeof factor.factor === 'string' && typeof factor.correlation === 'number'
+    );
     
-    // Get factor labels for rows
-    const factorLabels = factors.map(factor => factor.factor);
+    // If no valid factors found, return default empty state
+    if (factors.length === 0) {
+      return { data: [], rowLabels: defaultFactors, colLabels: ['Exchange Rate'] };
+    }
+    
+    // Get factor labels for rows - ensure they are strings and unique
+    const factorLabels = [...new Set(factors.map(factor => factor.factor))];
     
     // Create heatmap cells - only create correlations between factors and exchange rate
     const heatmapData = [];
@@ -223,7 +301,7 @@ export default function PredictionsPage() {
       setTargetCurrency(baseCurrency);
     }
     setBaseCurrency(currency);
-    setShowBaseCurrencyDropdown(false);
+    setShowCurrencyDropdown(false);
   };
   
   const handleTargetCurrencyChange = (currency: string) => {
@@ -301,7 +379,7 @@ export default function PredictionsPage() {
           {/* Currency Converter Section */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-8">
             {/* Currency Converter Tile */}
-            <div className="lg:col-span-9 bg-[#2a2a40] rounded-2xl p-6 min-h-[180px] flex items-center">
+            <div className="lg:col-span-12 bg-[#2a2a40] rounded-2xl p-6 min-h-[180px] flex items-center">
               <div className="flex flex-col md:flex-row items-center justify-between w-full">
                 <div className="flex flex-col mb-4 md:mb-0">
                   <div className="mb-2 text-white font-medium">Amount</div>
@@ -309,7 +387,7 @@ export default function PredictionsPage() {
                     <div className="relative">
                       <div 
                         className="flex items-center cursor-pointer"
-                        onClick={() => setShowBaseCurrencyDropdown(!showBaseCurrencyDropdown)}
+                        onClick={() => setShowCurrencyDropdown(!showCurrencyDropdown)}
                       >
                         <span className="mr-2">{baseInfo.flag}</span>
                         <span className="text-white">{baseInfo.code}</span>
@@ -317,7 +395,7 @@ export default function PredictionsPage() {
                       </div>
                       
                       {/* Currency Dropdown */}
-                      {showBaseCurrencyDropdown && (
+                      {showCurrencyDropdown && (
                         <div className="absolute top-full left-0 mt-1 bg-[#2a2a40] rounded-lg shadow-lg z-10 w-40">
                           {CURRENCIES.map(currency => (
                             <div 
@@ -385,15 +463,6 @@ export default function PredictionsPage() {
                 </div>
               </div>
             </div>
-            
-            {/* Confidence Score Tile */}
-            <div className="lg:col-span-3 bg-[#2a2a40] rounded-2xl p-6 min-h-[180px] flex justify-center items-center">
-              {prediction ? (
-                <ConfidenceScoreTile score={prediction.confidenceScore} />
-              ) : (
-                <div className="text-gray-400">No prediction data</div>
-              )}
-            </div>
           </div>
           
           {loading ? (
@@ -402,9 +471,31 @@ export default function PredictionsPage() {
             </div>
           ) : error ? (
             <div className="bg-red-900/30 text-red-200 p-6 rounded-lg text-center my-12">
-              {error}
+              <div className="text-xl font-semibold mb-2">Error</div>
+              <div className="mb-4">{error}</div>
               <button 
-                onClick={() => fetchCurrencyPrediction(baseCurrency, targetCurrency)}
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  fetchCurrencyPrediction(baseCurrency, targetCurrency, {
+                    forecastHorizon: 7,
+                    model: 'auto',
+                    refresh: true
+                  })
+                    .then(result => {
+                      // Force confidence score to be a number
+                      result.confidenceScore = Number(result.confidenceScore);
+                      console.log(`Retry button: Received prediction with confidence score: ${result.confidenceScore}`);
+                      setPrediction(result);
+                      setLoading(false);
+                    })
+                    .catch(err => {
+                      console.error('Error retrying prediction fetch:', err);
+                      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+                      setError(errorMessage);
+                      setLoading(false);
+                    });
+                }}
                 className="mt-4 bg-red-800 hover:bg-red-700 px-4 py-2 rounded-lg"
               >
                 Try Again
@@ -538,7 +629,18 @@ export default function PredictionsPage() {
                 </div>
               ) : correlationError ? (
                 <div className="bg-[#2a2a40] rounded-2xl p-6 mb-8">
-                  <div className="text-red-400">{correlationError}</div>
+                  <div className="flex flex-col items-center justify-center text-center py-8">
+                    <div className="text-gray-400 text-lg mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z" />
+                      </svg>
+                      {correlationError}
+                    </div>
+                    <div className="text-gray-500 text-sm max-w-md">
+                      This currency pair may not have sufficient correlation data available yet.
+                      Try a different currency pair or check back later.
+                    </div>
+                  </div>
                 </div>
               ) : correlationAnalysis ? (
                 <div className="bg-[#2a2a40] rounded-2xl p-6 mb-8">
@@ -560,18 +662,33 @@ export default function PredictionsPage() {
                     </div>
                   </div>
                   
-                  <CorrelationHeatmap 
-                    data={heatmapProps.data}
-                    rowLabels={heatmapProps.rowLabels}
-                    colLabels={heatmapProps.colLabels}
-                  />
-                  
-                  {correlationAnalysis.influencingFactors.length > 0 && (
-                    <div className="mt-6 border-t border-gray-700 pt-4">
-                      <div className="text-gray-300 text-sm">
-                        The data above shows how different economic factors correlate with changes in the {baseCurrency}/{targetCurrency} exchange rate.
-                        Factors with higher positive values tend to move in the same direction as the exchange rate, while 
-                        those with negative values tend to move in the opposite direction.
+                  {correlationAnalysis.influencingFactors && correlationAnalysis.influencingFactors.length > 0 ? (
+                    <>
+                      <CorrelationHeatmap 
+                        data={heatmapProps.data}
+                        rowLabels={heatmapProps.rowLabels}
+                        colLabels={heatmapProps.colLabels}
+                      />
+                      
+                      <div className="mt-6 border-t border-gray-700 pt-4">
+                        <div className="text-gray-300 text-sm">
+                          The data above shows how different economic factors correlate with changes in the {baseCurrency}/{targetCurrency} exchange rate.
+                          Factors with higher positive values tend to move in the same direction as the exchange rate, while 
+                          those with negative values tend to move in the opposite direction.
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center py-8">
+                      <div className="text-gray-400 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z" />
+                        </svg>
+                        No correlation factors found for this currency pair.
+                      </div>
+                      <div className="text-gray-500 text-sm max-w-md">
+                        This currency pair may not have sufficient historical data to establish strong correlations with economic factors.
+                        Popular pairs like USD/EUR, USD/GBP, or USD/JPY typically have more correlation data available.
                       </div>
                     </div>
                   )}
@@ -593,52 +710,63 @@ export default function PredictionsPage() {
                 </div>
               ) : anomalyError ? (
                 <div className="bg-[#2a2a40] rounded-2xl p-6 mb-8">
-                  <div className="text-red-400">{anomalyError}</div>
+                  <div className="flex flex-col items-center justify-center text-center py-8">
+                    <div className="text-gray-400 text-lg mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      {anomalyError}
+                    </div>
+                    <div className="text-gray-500 text-sm max-w-md">
+                      Anomaly detection data is not available for this currency pair.
+                      Try a different currency pair or check back later.
+                    </div>
+                  </div>
                 </div>
               ) : anomalyData ? (
                 <div className="bg-[#2a2a40] rounded-2xl p-6 mb-8">
                   <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center">
-                      <div className="text-2xl font-bold text-white mr-2">
-                        Exchange Rate Anomalies
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-end sm:items-center">
-                      <div className="text-gray-400 text-sm mr-4">
-                        <span className="mr-2">Analysis Period:</span>
-                        <span className="text-white">{anomalyData.analysis_period_days} days</span>
-                      </div>
-                      <div className="text-gray-400 text-sm">
-                        <span className="mr-2">Anomalies Found:</span>
-                        <span className={`font-bold ${anomalyData.anomaly_count > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                          {anomalyData.anomaly_count}
-                        </span>
-                      </div>
+                    <div className="text-xl font-bold text-white">Anomaly Detection</div>
+                    <div className="bg-[#3b3b60] px-3 py-1 rounded-full text-white text-sm">
+                      <span className="text-pink-500 font-bold">{anomalyData.anomaly_count}</span> anomalies found
                     </div>
                   </div>
                   
-                  <AnomalyDetectionChart 
-                    anomalyPoints={anomalyData.anomaly_points}
-                    baseCurrency={baseCurrency}
-                    targetCurrency={targetCurrency}
-                  />
-                  
-                  <div className="mt-6 border-t border-gray-700 pt-4">
-                    <div className="text-gray-300 text-sm">
-                      {anomalyData.anomaly_count > 0 ? (
-                        <>
-                          Our system has detected {anomalyData.anomaly_count} anomalies in the {baseCurrency}/{targetCurrency} exchange rate over the past {anomalyData.analysis_period_days} days.
-                          These anomalies represent times when the exchange rate behaved in unexpected ways, which might indicate market volatility or 
-                          reactions to significant economic events.
-                        </>
-                      ) : (
-                        <>
-                          No anomalies were detected in the {baseCurrency}/{targetCurrency} exchange rate over the past {anomalyData.analysis_period_days} days,
-                          indicating a period of relatively stable and predictable currency movement.
-                        </>
-                      )}
+                  {anomalyData.anomaly_count > 0 ? (
+                    <>
+                      <div className="text-gray-400 mb-4">
+                        Detected <span className="text-pink-500 font-semibold">{anomalyData.anomaly_count}</span> unusual price movements that may indicate market volatility, trading opportunities, or significant economic events. These data points deviate significantly from typical exchange rate patterns based on statistical Z-score analysis.
+                      </div>
+                      <div className="h-[300px]">
+                        <AnomalyDetectionChart 
+                          anomalyPoints={anomalyData.anomaly_points}
+                          baseCurrency={baseCurrency}
+                          targetCurrency={targetCurrency}
+                        />
+                      </div>
+                      <div className="mt-4 text-xs text-gray-500">
+                        <span className="text-pink-400 font-semibold">Note:</span> Anomalies are detected using statistical methods that identify exchange rates with Z-scores beyond ±2 standard deviations from the mean, indicating rare price movements that occur in less than 5% of cases.
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center py-12">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-green-500 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-white text-lg mb-2">No Anomalies Detected</div>
+                      <div className="text-gray-400 max-w-md">
+                        We analyzed the recent exchange rate data for {baseCurrency}/{targetCurrency} 
+                        over a {anomalyData.analysis_period_days}-day period and found no significant anomalies.
+                      </div>
+                      <div className="text-gray-500 text-sm mt-3 max-w-md">
+                        This suggests that the exchange rate has been following expected patterns. 
+                        Anomalies typically appear during major economic events, policy changes, or unexpected market shifts.
+                      </div>
+                      <div className="mt-4 text-xs text-indigo-400 p-2 border border-indigo-900/50 rounded-md max-w-md bg-indigo-900/20">
+                        Try different currency pairs like USD/JPY, EUR/GBP, or USD/BTC which typically show higher volatility and more frequent anomalies due to their sensitivity to market events.
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-[#2a2a40] rounded-2xl p-6 mb-8">
