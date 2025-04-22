@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Make the request from the server side to avoid CORS issues
-    const response = await fetch(`https://foresight-backend.devkitty.pro/api/v1/currency/rates/${from}/${to}/`);
+    const response = await fetch(`https://cews-backend.onrender.com/api/v1/currency/rates/${from}/${to}/`);
     
     if (!response.ok) {
       // If the API request fails, return an error
