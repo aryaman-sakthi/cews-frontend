@@ -31,6 +31,7 @@ export interface PredictionValue {
   mean: number;
   lower_bound: number;
   upper_bound: number;
+  isHistorical?: boolean;
 }
 
 export interface InfluencingFactor {
@@ -52,6 +53,7 @@ export interface CurrencyPrediction {
   meanSquareError?: number;
   rootMeanSquareError?: number;
   meanAbsoluteError?: number;
+  backtestValues?: PredictionValue[];
 }
 
 // New interface for Volatility Analysis
@@ -120,7 +122,8 @@ export const fetchCurrencyPrediction = async (
     refresh?: boolean, 
     forecastHorizon?: number, 
     model?: 'arima' | 'statistical' | 'auto', 
-    confidence?: number
+    confidence?: number,
+    backtest?: boolean
   }
 ): Promise<CurrencyPrediction> => {
   try {
@@ -143,6 +146,10 @@ export const fetchCurrencyPrediction = async (
     
     if (options?.confidence) {
       queryParams.append('confidence', options.confidence.toString());
+    }
+    
+    if (options?.backtest) {
+      queryParams.append('backtest', 'true');
     }
     
     // Add timestamp to prevent browser caching
@@ -168,6 +175,21 @@ export const fetchCurrencyPrediction = async (
     // Specifically check confidence_score value
     console.log(`Confidence score in attributes: ${attributes.confidence_score}, type: ${typeof attributes.confidence_score}`);
     
+    // Check for backtest data in the attributes
+    const backtest_values = attributes.backtest_values || [];
+    
+    // Add historical flag to backtest values
+    const backtestValuesWithFlag = backtest_values.map((value: PredictionValue) => ({
+      ...value,
+      isHistorical: true
+    }));
+    
+    // Add future flag to prediction values
+    const predictionValuesWithFlag = attributes.prediction_values.map((value: PredictionValue) => ({
+      ...value,
+      isHistorical: false
+    }));
+    
     // Transform to our frontend model
     const prediction = {
       baseCurrency: attributes.base_currency,
@@ -178,10 +200,11 @@ export const fetchCurrencyPrediction = async (
       modelVersion: attributes.model_version,
       inputDataRange: attributes.input_data_range,
       influencingFactors: attributes.influencing_factors,
-      predictionValues: attributes.prediction_values,
+      predictionValues: predictionValuesWithFlag,
       meanSquareError: attributes.mean_square_error,
       rootMeanSquareError: attributes.root_mean_square_error,
-      meanAbsoluteError: attributes.mean_absolute_error
+      meanAbsoluteError: attributes.mean_absolute_error,
+      backtestValues: backtestValuesWithFlag
     };
     
     // Log the transformed prediction object

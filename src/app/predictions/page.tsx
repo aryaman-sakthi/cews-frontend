@@ -7,8 +7,7 @@ import { PredictionRateCard } from '@/components/PredictionDashboard/PredictionR
 import { VolatilityAnalysis } from '@/components/PredictionDashboard/VolatilityAnalysis';
 import { CorrelationHeatmap } from '@/components/PredictionDashboard/CorrelationHeatmap';
 import { AnomalyDetectionChart } from '@/components/PredictionDashboard/AnomalyDetectionChart';
-import { createScrollObserver, scrollToElement } from '@/utils/scrollUtils';
-import { ConfidenceScoreTile } from '@/components/PredictionDashboard/ConfidenceScoreTile';
+import { scrollToElement } from '@/utils/scrollUtils';
 import { 
   fetchCurrencyPrediction, 
   fetchVolatilityAnalysis,
@@ -75,6 +74,9 @@ export default function PredictionsPage() {
   const [volatilityLoading, setVolatilityLoading] = useState(false);
   const [volatilityError, setVolatilityError] = useState<string | null>(null);
   
+  // Add state for showing historical data
+  const [showHistoricalData, setShowHistoricalData] = useState(true);
+  
   // Load prediction data when currencies change
   useEffect(() => {
     const loadPredictionData = async () => {
@@ -87,7 +89,8 @@ export default function PredictionsPage() {
         const result = await fetchCurrencyPrediction(baseCurrency, targetCurrency, {
           forecastHorizon: 7,
           model: 'auto',
-          refresh: true
+          refresh: true,
+          backtest: true // Request backtest data
         });
         
         // Force confidence score to be a number
@@ -318,21 +321,56 @@ export default function PredictionsPage() {
     setShowTargetCurrencyDropdown(false);
   };
   
-  // Create chart data from prediction values
-  const createChartData = (predictionValues: PredictionValue[]) => {
-    return predictionValues.map((value) => ({
+  // Toggle function for historical data display
+  const toggleHistoricalData = () => {
+    setShowHistoricalData(!showHistoricalData);
+  };
+  
+  // Modified createChartData function to filter based on the toggle state
+  const createChartData = (predictionValues: PredictionValue[], backtestValues?: PredictionValue[]) => {
+    // Log data to verify backtest functionality
+    console.log('Rendering chart with:');
+    console.log('- Future predictions:', predictionValues?.length || 0);
+    console.log('- Historical backtest data:', backtestValues?.length || 0);
+    
+    // Create data for future predictions
+    const futureData = predictionValues.map((value) => ({
       date: new Date(value.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: value.mean
+      value: value.mean,
+      isHistorical: false
     }));
+    
+    // Create data for historical backtest if available and if toggle is enabled
+    const historicalData = showHistoricalData && backtestValues ? backtestValues.map((value) => ({
+      date: new Date(value.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: value.mean,
+      isHistorical: true
+    })) : [];
+    
+    // Combine and sort by date
+    const combinedData = [...historicalData, ...futureData].sort((a, b) => {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+    
+    console.log('Combined chart data:', combinedData);
+    return combinedData;
   };
   
   // Create prediction rate data from prediction values
-  const createPredictionRates = (predictionValues: PredictionValue[]) => {
-    return predictionValues.map((value) => ({
+  const createPredictionRates = (predictionValues: PredictionValue[], backtestValues?: PredictionValue[]) => {
+    // Only include both historical and future data if the toggle is on
+    const valuesToUse = showHistoricalData && backtestValues 
+      ? [...backtestValues, ...predictionValues].sort((a, b) => 
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        )
+      : predictionValues;
+    
+    return valuesToUse.map((value) => ({
       date: new Date(value.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       high: value.upper_bound,
       mean: value.mean,
-      low: value.lower_bound
+      low: value.lower_bound,
+      isHistorical: !!value.isHistorical
     }));
   };
   
@@ -512,18 +550,36 @@ export default function PredictionsPage() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
                 <div className="lg:col-span-8">
                   <div className="bg-[#2a2a40] rounded-2xl p-6">
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="font-medium text-lg text-white flex justify-between items-center">
                       <div className="text-white">{baseCurrency} to {targetCurrency} conversion chart</div>
                       <div className="text-purple-400 font-bold">
                         1 {baseCurrency} = <span className="text-pink-500">{prediction.currentRate.toFixed(5)}</span> {targetCurrency}
                       </div>
                     </div>
-                    <div className="text-gray-400 text-sm mb-4">
+                    <div className="text-gray-400 text-sm mb-2">
                       Data range: {prediction.inputDataRange}
                     </div>
+                    
+                    {/* Historical data toggle switch */}
+                    <div className="flex items-center mb-3">
+                      <span className="text-gray-400 text-sm mr-2">Show past 7 days:</span>
+                      <button 
+                        onClick={toggleHistoricalData}
+                        className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors focus:outline-none ${
+                          showHistoricalData ? 'bg-indigo-600' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            showHistoricalData ? 'translate-x-7' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    
                     <div className="h-[300px]">
                       <ConversionRateChart 
-                        data={createChartData(prediction.predictionValues)}
+                        data={createChartData(prediction.predictionValues, prediction.backtestValues)}
                         fromCurrency={baseCurrency}
                         toCurrency={targetCurrency}
                       />
@@ -533,7 +589,7 @@ export default function PredictionsPage() {
                 
                 <div className="lg:col-span-4">
                   <PredictionRateCard 
-                    predictions={createPredictionRates(prediction.predictionValues)}
+                    predictions={createPredictionRates(prediction.predictionValues, prediction.backtestValues)}
                     initialIndex={0}
                   />
                 </div>
