@@ -46,8 +46,8 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
           {selectedPrediction.isHistorical && (
             <span className="ml-2 bg-green-500 text-white text-xs py-1 px-2 rounded-full">Historical</span>
           )}
-        </div>
-      </div>
+            </div>
+          </div>
       
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="bg-[#2a2a60] p-3 rounded-lg">
@@ -68,7 +68,7 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
         <div className="text-gray-400 text-sm mb-2">Date Selection</div>
         <div className="grid grid-cols-4 gap-2">
           {predictions.map((prediction, index) => (
-            <button 
+        <button 
               key={index}
               onClick={() => setSelectedIndex(index)}
               className={`p-2 rounded text-center text-xs ${
@@ -80,7 +80,7 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
               }`}
             >
               {prediction.date.split('/').slice(0, 2).join('/')}
-            </button>
+        </button>
           ))}
         </div>
       </div>
