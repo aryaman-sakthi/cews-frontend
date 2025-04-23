@@ -277,26 +277,31 @@ export default function MicroservicesPage() {
             {/* Subsection tabs - with special handling for different section types */}
             <div className="flex justify-center mb-8">
               <div className="bg-[#2a2a40]/70 rounded-xl p-1.5 flex min-w-[70%] max-w-[800px]">
-                <div className="flex w-full justify-evenly">
+                <div className="flex w-full">
                   {section.subsections.map((subsection) => {
                     // Special handling based on section type
-                    let buttonClass;
-                    
                     if (section.id === 'data-visualization' || section.id === 'alert-system') {
-                      // For Data Visualization and Alert System - single line text with auto width
-                      buttonClass = "px-8 whitespace-nowrap"; // Auto width to fit content with nowrap
-                    } else if (section.subsections.length === 2) {
-                      // Two tabs - fixed width
-                      buttonClass = "w-40";
+                      // For Data Visualization and Alert System - center with whitespace-nowrap
+                      return (
+                        <div key={subsection} className="flex justify-center w-full">
+                          <button
+                            className={`px-8 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                              activeSubsections[section.id] === subsection
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-gray-300 hover:bg-[#3a3a50]/50'
+                            }`}
+                            onClick={() => handleSubsectionChange(section.id, subsection)}
+                          >
+                            {subsection}
+                          </button>
+                        </div>
+                      );
                     } else {
-                      // 3+ tabs - distribute evenly
-                      buttonClass = "flex-1 mx-1";
-                    }
-                      
-                    return (
-                      <div key={subsection} className="flex justify-center">
+                      // For Analytical Model and Data Collection - original style
+                      return (
                         <button
-                          className={`${buttonClass} py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                          key={subsection}
+                          className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors mx-1 ${
                             activeSubsections[section.id] === subsection
                               ? 'bg-indigo-600 text-white'
                               : 'text-gray-300 hover:bg-[#3a3a50]/50'
@@ -305,8 +310,8 @@ export default function MicroservicesPage() {
                         >
                           {subsection}
                         </button>
-                      </div>
-                    );
+                      );
+                    }
                   })}
                 </div>
               </div>
