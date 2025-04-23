@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { CurrencyConverter } from '@/components/CurrencyDashboard/CurrencyConverter';
 import { ConversionChart } from '@/components/CurrencyDashboard/ConversionChart';
 import { MarketNews } from '@/components/CurrencyDashboard/MarketNews';
-import { PredictedRate } from '@/components/CurrencyDashboard/PredictedRate';
 import { AlertSubscription } from '@/components/CurrencyDashboard/AlertSubscription';
 import { fetchExchangeRate } from '@/lib/api';
 import { supportedCurrencies } from '@/utils/currencyData';
@@ -71,22 +70,6 @@ export default function Home() {
     { date: 'Nov 30', value: rate },
   ];
 
-  const news = [
-    {
-      id: '1',
-      title: `${fromCurrency}/${toCurrency} Market Update`,
-      imageUrl: '/news/1.jpg',
-    },
-    // Add more news items
-  ];
-
-  const prediction = {
-    day: 3,
-    rate: rate * 1.05, // Example: 5% higher rate prediction
-    change: 5.0,
-    confidence: 82.5,
-  };
-
   const handleFromCurrencyChange = (currency: string) => {
     if (currency === toCurrency) {
       setToCurrency(fromCurrency); // Swap currencies if same one is selected
@@ -116,7 +99,7 @@ export default function Home() {
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <div className="bg-[#2a2a40] rounded-2xl p-6">
+            <div className="bg-[#2a2a40] rounded-2xl p-6 h-full">
               {isLoading ? (
                 <div className="flex justify-center items-center p-6">
                   <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
@@ -145,12 +128,13 @@ export default function Home() {
               />
             </div>
           </div>
-          <div className="lg:col-span-1 space-y-6">
-            <MarketNews 
-              fromCurrency={fromCurrency} 
-              toCurrency={toCurrency} 
-            />
-            <PredictedRate prediction={prediction} />
+          <div className="lg:col-span-1">
+            <div className="h-full">
+              <MarketNews 
+                fromCurrency={fromCurrency} 
+                toCurrency={toCurrency} 
+              />
+            </div>
           </div>
         </div>
         

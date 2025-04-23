@@ -1,6 +1,6 @@
 'use client';
  
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface AlertSubscriptionProps {
   fromCurrency?: string;
@@ -15,9 +15,16 @@ export const AlertSubscription: React.FC<AlertSubscriptionProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [threshold, setThreshold] = useState('');
-  const [alertType, setAlertType] = useState('above');
+  const [alertType, setAlertType] = useState('below');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Initialize threshold with current rate when component loads or rate changes
+  useEffect(() => {
+    if (currentRate) {
+      setThreshold(currentRate.toFixed(5));
+    }
+  }, [currentRate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,14 +34,16 @@ export const AlertSubscription: React.FC<AlertSubscriptionProps> = ({
     try {
       const alertData = {
         email,
-        threshold: parseFloat(threshold),
+        threshold: threshold, // Send as string to match expected format
         base: fromCurrency,
         target: toCurrency,
         alert_type: alertType,
       };
 
-      // Make POST request to your API
-      const response = await fetch('/api/alerts/register/', {
+      console.log('Sending alert data:', alertData);
+
+      // Make POST request to our Next.js API route
+      const response = await fetch('/api/alerts/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -43,6 +52,7 @@ export const AlertSubscription: React.FC<AlertSubscriptionProps> = ({
       });
 
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (response.ok) {
         setMessage({
@@ -51,10 +61,10 @@ export const AlertSubscription: React.FC<AlertSubscriptionProps> = ({
         });
         // Reset form
         setEmail('');
-        setThreshold('');
+        // Keep the threshold as is or reset based on your preference
       } else {
         setMessage({
-          text: `Error: ${JSON.stringify(data)}`,
+          text: `Error: ${data.error || JSON.stringify(data)}`,
           type: 'error',
         });
       }
@@ -145,7 +155,7 @@ export const AlertSubscription: React.FC<AlertSubscriptionProps> = ({
               id="threshold"
               type="number"
               placeholder={displayRate.toFixed(5)}
-              step="0.000001"
+              step="0.00001"
               min="0"
               value={threshold}
               onChange={(e) => setThreshold(e.target.value)}

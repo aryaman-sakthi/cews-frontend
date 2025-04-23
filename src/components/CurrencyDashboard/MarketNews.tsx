@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { NewsItem } from '@/types/currency';
 
 interface MarketNewsProps {
   fromCurrency: string;
@@ -30,43 +30,62 @@ export const MarketNews: React.FC<MarketNewsProps> = ({ fromCurrency, toCurrency
       setError(null);
 
       try {
-        // First try to fetch news for the currency pair (e.g., USD/EUR)
-        const pairResponse = await fetch(`/api/currency-news?currency=${fromCurrency}/${toCurrency}&limit=5`);
-        let data = await pairResponse.json();
+        // Step 1: Trigger fetch requests for both individual currencies
+        const triggers = [];
         
-        // If no events or empty response, try each currency individually
-        if (!data.events || data.events.length === 0) {
-          // Fetch for fromCurrency
-          const fromResponse = await fetch(`/api/currency-news?currency=${fromCurrency}&limit=3`);
-          const fromData = await fromResponse.json();
-          
-          // Fetch for toCurrency
-          const toResponse = await fetch(`/api/currency-news?currency=${toCurrency}&limit=3`);
-          const toData = await toResponse.json();
-          
-          // Combine results from both currencies
-          const combinedEvents = [
-            ...(fromData.events || []),
-            ...(toData.events || [])
-          ];
-          
-          // Sort by timestamp, newest first
-          combinedEvents.sort((a: any, b: any) => {
-            return new Date(b.time_object.timestamp).getTime() - 
-                   new Date(a.time_object.timestamp).getTime();
-          });
-          
-          // Limit to 5 items
-          const limitedEvents = combinedEvents.slice(0, 5);
-          
-          if (limitedEvents.length > 0) {
-            data = { ...fromData, events: limitedEvents };
-          }
-        }
-
+        console.log(`Triggering fetch for ${fromCurrency}...`);
+        triggers.push(fetch(`/api/currency-news?currency=${fromCurrency}&limit=3&mode=fetch`)
+          .then(response => {
+            if (!response.ok) console.error(`Failed to trigger fetch for ${fromCurrency}`);
+            return response.json();
+          })
+          .catch(err => console.error(`Error triggering fetch for ${fromCurrency}:`, err))
+        );
+        
+        console.log(`Triggering fetch for ${toCurrency}...`);
+        triggers.push(fetch(`/api/currency-news?currency=${toCurrency}&limit=3&mode=fetch`)
+          .then(response => {
+            if (!response.ok) console.error(`Failed to trigger fetch for ${toCurrency}`);
+            return response.json();
+          })
+          .catch(err => console.error(`Error triggering fetch for ${toCurrency}:`, err))
+        );
+        
+        // Execute all trigger requests in parallel
+        const triggerResults = await Promise.all(triggers);
+        console.log('Trigger results:', triggerResults);
+        
+        // Step 2: Wait for AlphaVantage to process the data
+        console.log(`Waiting 35 seconds for ${fromCurrency} and ${toCurrency} data to be processed...`);
+        await new Promise(resolve => setTimeout(resolve, 35000)); // 35 seconds wait
+        
+        // Step 3: Fetch data for both currencies and combine
+        // Fetch for fromCurrency
+        const fromResponse = await fetch(`/api/currency-news?currency=${fromCurrency}&limit=3&mode=get`);
+        const fromData = await fromResponse.json();
+        
+        // Fetch for toCurrency
+        const toResponse = await fetch(`/api/currency-news?currency=${toCurrency}&limit=3&mode=get`);
+        const toData = await toResponse.json();
+        
+        // Combine results from both currencies
+        const combinedEvents = [
+          ...(fromData.events || []),
+          ...(toData.events || [])
+        ];
+        
+        // Sort by timestamp, newest first
+        combinedEvents.sort((a: any, b: any) => {
+          return new Date(b.time_object.timestamp).getTime() - 
+                 new Date(a.time_object.timestamp).getTime();
+        });
+        
+        // Limit to 5 items
+        const limitedEvents = combinedEvents.slice(0, 5);
+        
         // Process the news data
-        if (data.events && data.events.length > 0) {
-          const articles = data.events.map((event: any) => ({
+        if (limitedEvents.length > 0) {
+          const articles = limitedEvents.map((event: any) => ({
             title: event.attributes.title,
             source: event.attributes.source,
             url: event.attributes.url,
@@ -132,30 +151,48 @@ export const MarketNews: React.FC<MarketNewsProps> = ({ fromCurrency, toCurrency
   };
 
   return (
-    <div className="bg-[#2a2a40] rounded-2xl p-6">
+    <div className="bg-[#2a2a40] rounded-2xl p-6 h-full flex flex-col">
       <h2 className="text-white text-xl font-semibold mb-4">Market News</h2>
       
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+        <div className="flex-1 space-y-4">
+          {[...Array(5)].map((_, index) => (
+            <div key={index} className="flex items-start space-x-3 p-4">
+              <div className="relative w-16 h-16 flex-shrink-0">
+                <div className="w-full h-full bg-[#3a3a50] rounded-lg animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="h-4 bg-[#3a3a50] rounded w-3/4 animate-pulse" />
+                <div className="h-3 bg-[#3a3a50] rounded w-1/4 animate-pulse" />
+                <div className="h-3 bg-[#3a3a50] rounded w-1/3 animate-pulse" />
+              </div>
+            </div>
+          ))}
+          <div className="text-center text-gray-400 text-sm mt-4">
+            Fetching latest market news...
+          </div>
         </div>
       ) : error ? (
-        <div className="text-red-400 text-sm p-4">{error}</div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-red-400 text-sm p-4">{error}</div>
+        </div>
       ) : news.length === 0 ? (
-        <div className="text-gray-400 text-sm text-center py-4">
-          No news available for {fromCurrency}/{toCurrency}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-gray-400 text-sm text-center">
+            No news available for {fromCurrency} or {toCurrency}
+          </div>
         </div>
       ) : (
-        <div className="space-y-4 max-h-80 overflow-y-auto">
+        <div className="flex-1 space-y-4 overflow-y-auto">
           {news.map((item, index) => (
             <a 
               href={item.url} 
               target="_blank" 
               rel="noopener noreferrer"
               key={index} 
-              className="flex items-start space-x-3 p-2 hover:bg-[#3a3a50] rounded-lg transition-colors"
+              className="flex items-start space-x-3 p-4 hover:bg-[#3a3a50] rounded-lg transition-colors"
             >
-              <div className="relative w-12 h-12 flex-shrink-0">
+              <div className="relative w-16 h-16 flex-shrink-0">
                 <Image
                   src={getSourceImage(item.source)}
                   alt={item.source}
@@ -164,8 +201,8 @@ export const MarketNews: React.FC<MarketNewsProps> = ({ fromCurrency, toCurrency
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-white text-sm font-medium truncate">{item.title}</h3>
-                <p className="text-gray-400 text-xs mt-1 truncate">{item.source}</p>
+                <h3 className="text-white text-sm font-medium line-clamp-2">{item.title}</h3>
+                <p className="text-gray-400 text-xs mt-1">{item.source}</p>
                 <div className={`text-xs mt-1 ${getSentimentColor(item.sentiment_label)}`}>
                   {item.sentiment_label.replace(/_/g, ' ')} 
                   ({item.sentiment_score.toFixed(2)})

@@ -1,152 +1,143 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mock data generator for development
-const generateMockNews = (currency: string, limit: number) => {
-  const mockNewsItems = [
-    {
-      title: `${currency} gains momentum as economic outlook improves`,
-      source: 'Financial Times',
-      url: 'https://www.ft.com',
-      summary: `The ${currency} showed strong performance against major currencies amid positive economic data.`,
-      sentiment_score: 0.75,
-      sentiment_label: 'bullish',
-      currency: currency
-    },
-    {
-      title: `${currency} faces pressure following central bank announcement`,
-      source: 'Bloomberg',
-      url: 'https://www.bloomberg.com',
-      summary: `The ${currency} declined after the central bank signaled potential policy changes in the upcoming quarter.`,
-      sentiment_score: -0.45,
-      sentiment_label: 'somewhat_bearish',
-      currency: currency
-    },
-    {
-      title: `Analysts predict ${currency} volatility in coming weeks`,
-      source: 'Reuters',
-      url: 'https://www.reuters.com',
-      summary: `Market analysts expect increased ${currency} volatility due to geopolitical tensions and trade uncertainties.`,
-      sentiment_score: 0.15,
-      sentiment_label: 'neutral',
-      currency: currency
-    },
-    {
-      title: `${currency} trading volume reaches new highs`,
-      source: 'CNBC',
-      url: 'https://www.cnbc.com',
-      summary: `Trading volume for ${currency} reached record levels as institutional investors increase their positions.`,
-      sentiment_score: 0.62,
-      sentiment_label: 'somewhat_bullish',
-      currency: currency
-    },
-    {
-      title: `${currency} outlook remains uncertain amid global economic slowdown`,
-      source: 'Wall Street Journal',
-      url: 'https://www.wsj.com',
-      summary: `Experts remain divided on the future of ${currency} as global economic indicators show mixed signals.`,
-      sentiment_score: -0.12,
-      sentiment_label: 'neutral',
-      currency: currency
-    }
-  ];
-
-  // Randomize and return limited number of items
-  const randomized = [...mockNewsItems].sort(() => 0.5 - Math.random());
-  return randomized.slice(0, Math.min(limit, mockNewsItems.length));
-};
-
 export async function GET(request: NextRequest) {
   // Get query parameters from the request
   const searchParams = request.nextUrl.searchParams;
   const currency = searchParams.get('currency') || 'USD';
   const limit = parseInt(searchParams.get('limit') || '10');
+  const sentimentScore = searchParams.get('sentiment_score');
+  const mode = searchParams.get('mode') || 'get'; // 'fetch' or 'get'
 
   try {
-    // For production: uncomment this section and comment out the mock data section below
-    /*
-    // Construct the URL with query parameters
-    let url = `https://foresight-backend.devkitty.pro/api/v1/currency/news/?currency=${currency}&limit=${limit}`;
+    // Remove any currency pair formatting - backend only supports single currencies
+    const cleanCurrency = currency.split('/')[0]; // Take only the first part if it's a pair
     
-    // Make the request from the server side to avoid CORS issues
-    const response = await fetch(url);
+    console.log(`Processing currency news for ${cleanCurrency}, mode: ${mode}`);
     
-    if (!response.ok) {
-      // If the API request fails, return an error
-      return NextResponse.json(
-        { error: `Failed to fetch currency news: ${response.status}` },
-        { status: response.status }
-      );
+    // Step 1: If in fetch mode, trigger Alpha Vantage fetch and return immediately
+    if (mode === 'fetch') {
+      // Construct URL for the trigger endpoint
+      const fetchUrl = new URL(`https://cews-backend.onrender.com/api/v1/currency/${cleanCurrency}`);
+      
+      // Don't include limit parameter in the URL - it isn't needed based on your screenshot
+      console.log(`Triggering Alpha Vantage fetch for ${cleanCurrency}: ${fetchUrl.toString()}`);
+      
+      try {
+        // Set a longer timeout for the Alpha Vantage fetch
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
+        
+        const fetchResponse = await fetch(fetchUrl.toString(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          // Send an empty object as body to ensure it's a proper POST request
+          body: JSON.stringify({}),
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!fetchResponse.ok) {
+          console.error(`Error triggering Alpha Vantage fetch: ${fetchResponse.status}`);
+          // Even if there's an error, return a success response to allow the frontend to proceed
+          return NextResponse.json({ 
+            status: 'success', 
+            message: `Alpha Vantage fetch triggered for ${cleanCurrency}. It may take time to process.` 
+          });
+        }
+        
+        // Return success response for the fetch trigger
+        console.log('Successfully triggered Alpha Vantage fetch');
+        return NextResponse.json({ 
+          status: 'success', 
+          message: 'Alpha Vantage fetch triggered successfully. Data will be available in approximately 30 seconds.' 
+        });
+      } catch (error: unknown) {
+        // Type checking for errors
+        const fetchError = error as { name?: string };
+        if (fetchError && fetchError.name === 'AbortError') {
+          console.error('Alpha Vantage trigger timed out');
+        } else {
+          console.error('Error triggering Alpha Vantage fetch:', error);
+        }
+        
+        // Even if there's an error, return a "success" response to allow the frontend to proceed
+        return NextResponse.json({ 
+          status: 'success', 
+          message: `Alpha Vantage fetch triggered for ${cleanCurrency}. It may take time to process.` 
+        });
+      }
     }
     
-    // Get the data from the API
+    // Step 2: Get mode - retrieve news from database without triggering new fetch
+    console.log(`Retrieving news data for ${cleanCurrency} from database`);
+    
+    // Construct the URL for the database endpoint
+    const url = new URL('https://cews-backend.onrender.com/api/v1/news/events');
+    
+    // Add query parameters
+    url.searchParams.append('currency', cleanCurrency);
+    url.searchParams.append('limit', limit.toString());
+    
+    if (sentimentScore) {
+      url.searchParams.append('sentiment_score', sentimentScore);
+    }
+    
+    // Make the request with a timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+    
+    console.log(`Fetching news from database: ${url.toString()}`);
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.error(`Database API error: ${response.status}`);
+      return createEmptyResponse(cleanCurrency);
+    }
+    
+    // Parse the database response
     const data = await response.json();
     
-    // Return the full response
+    // Check if we have events
+    if (!data.events || data.events.length === 0) {
+      console.log('No news events found in the database');
+      return createEmptyResponse(cleanCurrency);
+    }
+    
+    // Return the data from database
+    console.log(`Found ${data.events.length} news events for ${cleanCurrency}`);
     return NextResponse.json(data);
-    */
-
-    // Generate mock data for development
-    const currentTime = new Date().toISOString();
-    const currencyParts = currency.includes('/') ? currency.split('/') : [currency];
     
-    // Generate news for each currency if it's a pair
-    let allMockNews: any[] = [];
-    currencyParts.forEach(curr => {
-      const mockNews = generateMockNews(curr, Math.ceil(limit / currencyParts.length));
-      allMockNews = [...allMockNews, ...mockNews];
-    });
-    
-    // Limit to requested number of items
-    allMockNews = allMockNews.slice(0, limit);
-    
-    // Create events in the ADAGE format
-    const events = allMockNews.map((item, index) => {
-      // Create a random date within the last 7 days
-      const daysAgo = Math.floor(Math.random() * 7);
-      const publishDate = new Date();
-      publishDate.setDate(publishDate.getDate() - daysAgo);
-      
-      return {
-        time_object: {
-          timestamp: publishDate.toISOString(),
-          duration: 0,
-          duration_unit: "second",
-          timezone: "UTC"
-        },
-        event_type: "currency_news",
-        event_id: `mock-news-${index}-${Date.now()}`,
-        attributes: {
-          title: item.title,
-          source: item.source,
-          url: item.url,
-          summary: item.summary,
-          sentiment_score: item.sentiment_score,
-          sentiment_label: item.sentiment_label,
-          currency: item.currency
-        }
-      };
-    });
-
-    // Create full response in ADAGE format
-    const mockResponse = {
-      data_source: "Mock Data",
-      dataset_type: "currency_news",
-      dataset_id: `currency-news-${currency}-${Date.now()}`,
-      time_object: {
-        timestamp: currentTime,
-        timezone: "UTC"
-      },
-      events: events
-    };
-    
-    return NextResponse.json(mockResponse);
   } catch (error) {
     console.error('Error in currency news API route:', error);
-    
-    // Return error response
-    return NextResponse.json(
-      { error: 'Failed to fetch currency news', events: [] },
-      { status: 500 }
-    );
+    return createEmptyResponse(currency);
   }
+}
+
+// Helper function to create empty response in ADAGE format
+function createEmptyResponse(currency: string) {
+  const currentTime = new Date().toISOString();
+  const dateStr = currentTime.split('T')[0].replace(/-/g, '');
+  
+  const emptyResponse = {
+    data_source: "Alpha Vantage",
+    dataset_type: "currency_news",
+    dataset_id: `currency-news-${currency}-${dateStr}`,
+    time_object: {
+      timestamp: currentTime,
+      timezone: "UTC"
+    },
+    events: []
+  };
+  
+  return NextResponse.json(emptyResponse, { status: 200 });
 }
