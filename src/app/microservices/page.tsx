@@ -10,6 +10,7 @@ interface ApiEndpoint {
   url: string;
   exampleRequest: string;
   documentationLink: string;
+  copyUrl?: string; // Optional field for the URL to copy (without HTTP method)
 }
 
 // Data for the API endpoints
@@ -199,6 +200,12 @@ export default function MicroservicesPage() {
     'alert-system': 'Exchange Rate Alerts'
   });
 
+  // Add state for toast notification
+  const [toast, setToast] = useState<{visible: boolean, message: string}>({
+    visible: false,
+    message: ''
+  });
+
   // Function to change active subsection
   const handleSubsectionChange = (sectionId: string, subsection: string) => {
     setActiveSubsections(prev => ({
@@ -207,12 +214,58 @@ export default function MicroservicesPage() {
     }));
   };
 
-  // Function to render endpoint tiles
+  // Function to render endpoint tiles with copy button
   const renderEndpoints = (endpoints: ApiEndpoint[]) => {
+    // Function to copy URL to clipboard with toast notification
+    const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          // Show toast notification
+          setToast({
+            visible: true,
+            message: 'URL copied to clipboard!'
+          });
+          
+          // Hide toast after 2 seconds
+          setTimeout(() => {
+            setToast({visible: false, message: ''});
+          }, 2000);
+        })
+        .catch(err => {
+          console.error('Failed to copy: ', err);
+          setToast({
+            visible: true,
+            message: 'Failed to copy URL'
+          });
+          
+          // Hide toast after 2 seconds
+          setTimeout(() => {
+            setToast({visible: false, message: ''});
+          }, 2000);
+        });
+    };
+
+    // Function to extract path from URL (remove HTTP method)
+    const getPathFromUrl = (url: string): string => {
+      // Remove any HTTP method at the beginning (GET, POST, PUT, DELETE, etc.)
+      return url.replace(/^(GET|POST|PUT|DELETE|PATCH)\s+/i, '');
+    };
+
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {endpoints.map((endpoint, idx) => (
-          <div key={idx} className="bg-[#2a2a40] rounded-2xl p-6 text-white flex flex-col h-full min-h-[320px]">
+          <div key={idx} className="bg-[#2a2a40] rounded-2xl p-6 text-white flex flex-col h-full min-h-[320px] relative">
+            {/* Copy button */}
+            <button 
+              className="absolute top-3 right-3 bg-[#3b3b60]/70 hover:bg-indigo-600 p-1.5 rounded-md transition-colors"
+              onClick={() => copyToClipboard(endpoint.copyUrl || getPathFromUrl(endpoint.url))}
+              title="Copy API path"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+
             <div className="flex-grow overflow-hidden">
               <h3 className="text-xl font-semibold mb-2">{endpoint.name}</h3>
               <p className="text-gray-300 mb-4 text-sm">{endpoint.description}</p>
@@ -321,6 +374,16 @@ export default function MicroservicesPage() {
             {renderEndpoints(section.endpoints[activeSubsections[section.id]] || [])}
           </div>
         ))}
+
+        {/* Toast Notification */}
+        {toast.visible && (
+          <div className="fixed bottom-4 right-4 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            {toast.message}
+          </div>
+        )}
       </div>
 
       {/* Add custom scrollbar styles */}
