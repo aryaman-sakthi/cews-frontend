@@ -19,48 +19,55 @@ const DATA_COLLECTION_ENDPOINTS: Record<string, ApiEndpoint[]> = {
     {
       name: 'Latest Exchange Rate',
       description: 'Retrieves the current exchange rate between two currencies',
-      url: 'GET /api/v1/currency/latest/rate/{baseCurrency}/{targetCurrency}',
-      exampleRequest: 'GET /api/v1/currency/latest/rate/USD/EUR',
-      documentationLink: '/docs/api/currency-exchange/latest-rate',
+      url: 'GET /api/v1/currency/rates/{base}/{target}/',
+      exampleRequest: 'GET /api/v1/currency/latest/rate/USD/EUR/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Currency%20Collector/get_api_v1_currency_rates__base___target__',
     },
     {
       name: 'Historical Exchange Rates',
-      description: 'Retrieves historical exchange rates over a specified time period',
-      url: 'GET /api/v1/currency/historical/{baseCurrency}/{targetCurrency}?from={startDate}&to={endDate}',
-      exampleRequest: 'GET /api/v1/currency/historical/USD/EUR?from=2023-01-01&to=2023-01-31',
-      documentationLink:  '/docs/api/currency-exchange/historical-rates',
+      description: 'Retrieve historical exchange rates for a currency pair',
+      url: 'GET /api/v1/currency/rates/{from_currency}/{to_currency}/historical',
+      exampleRequest: 'GET /api/v1/currency/rates/USD/EUR/historical',
+      documentationLink:  'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Currency%20Collector/get_api_v1_currency_rates__from_currency___to_currency__historical',
     }
   ],
   'Financial News': [
     {
-      name: 'Latest Currency News',
-      description: 'Retrieves the latest news articles related to specified currencies',
-      url: 'GET /api/v1/news/currency/{currencies}',
-      exampleRequest: 'GET /api/v1/news/currency/USD,EUR,JPY',
-      documentationLink: '/docs/api/financial-news/latest',
+      name: 'General Financial News',
+      description: 'Fetch general financial news',
+      url: 'GET /api/v1/financial/',
+      exampleRequest: 'GET /api/v1/financial/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20News%20Collector/get_api_v1_financial_',
     },
     {
-      name: 'Sentiment Analysis',
-      description: 'Analyzes the sentiment of news articles for a currency',
-      url: 'GET /api/v1/news/sentiment/{currency}',
-      exampleRequest: 'GET /api/v1/news/sentiment/USD',
-      documentationLink: '/docs/api/financial-news/sentiment',
+      name: 'Store Currency News',
+      description: 'Fetch and store news related to a specific currency',
+      url: 'POST /api/v1/currency/{currency}',
+      exampleRequest: 'POST /api/v1/currency/USD',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20News%20Collector/post_api_v1_currency__currency_',
+    },
+    {
+      name: 'Currency News Events',
+      description: 'Retrieve stored currency news events',
+      url: 'GET /api/v1/news/events',
+      exampleRequest: 'GET /api/v1/news/events',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20News%20Collector/get_api_v1_news_events',
     }
   ],
   'Economic Indicators': [
     {
-      name: 'Interest Rates',
-      description: 'Retrieves current and historical interest rates for a country',
-      url: 'GET /api/v1/indicators/interest-rates/{countryCode}',
-      exampleRequest: 'GET /api/v1/indicators/interest-rates/US',
-      documentationLink: '/docs/api/economic-indicators/interest-rates',
+      name: 'Annual Economic Indicators',
+      description: 'Fetches and stores annual economic indicators (Real GDP & Inflation) from Alpha Vantage. Returns the latest stored indicators',
+      url: 'POST /api/v1/economic/indicators/annual/',
+      exampleRequest: 'POST /api/v1/economic/indicators/annual/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Economic%20Indicators/post_api_v1_economic_indicators_annual_',
     },
     {
-      name: 'GDP Growth',
-      description: 'Retrieves GDP growth data for a country',
-      url: 'GET /api/v1/indicators/gdp-growth/{countryCode}',
-      exampleRequest: 'GET /api/v1/indicators/gdp-growth/US',
-      documentationLink: '/docs/api/economic-indicators/gdp-growth',
+      name: 'Monthly Economic Indicators',
+      description: 'Fetches and stores monthly economic indicators (CPI, Unemployment Rate, Federal Funds Rate, Treasury Yield) from Alpha Vantage. Returns the latest stored indicators',
+      url: 'POST /api/v1/economic/indicators/monthly/',
+      exampleRequest: 'POST /api/v1/economic/indicators/monthly/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Economic%20Indicators/post_api_v1_economic_indicators_monthly_',
     }
   ]
 };
@@ -68,18 +75,39 @@ const DATA_COLLECTION_ENDPOINTS: Record<string, ApiEndpoint[]> = {
 const DATA_VISUALIZATION_ENDPOINTS: Record<string, ApiEndpoint[]> = {
   'Forex History Graphs': [
     {
-      name: 'Line Chart',
-      description: 'Generates a line chart of historical exchange rates',
-      url: 'GET /api/v1/visualization/line-chart/{baseCurrency}/{targetCurrency}?period={days}',
-      exampleRequest: 'GET /api/v1/visualization/line-chart/USD/EUR?period=30',
-      documentationLink: '/docs/api/visualization/line-chart',
+      name: 'Exchange Rate Graph (Last Week)',
+      description: 'Generate a graph of exchange rates for the last week',
+      url: 'GET /api/v1/graph/{from_currency}/{to_currency}/last-week',
+      exampleRequest: 'GET /api/v1/graph/USD/EUR/last-week',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Data%20Visualization/get_api_v1_graph__from_currency___to_currency__last_week',
     },
     {
-      name: 'Candlestick Chart',
-      description: 'Generates a candlestick chart for forex trading analysis',
-      url: 'GET /api/v1/visualization/candlestick/{baseCurrency}/{targetCurrency}?period={days}',
-      exampleRequest: 'GET /api/v1/visualization/candlestick/USD/JPY?period=30',
-      documentationLink: '/docs/api/visualization/candlestick',
+      name: 'Exchange Rate Graph (Last Month)',
+      description: 'Generate a graph of exchange rates for the last month',
+      url: 'GET /api/v1/graph/{from_currency}/{to_currency}/last-month',
+      exampleRequest: 'GET /api/v1/graph/USD/EUR/last-month',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Data%20Visualization/get_api_v1_graph__from_currency___to_currency__last_month',
+    },
+    {
+      name: 'Exchange Rate Graph (Last 6 Months)',
+      description: 'Generate a graph of exchange rates for the last 6 months',
+      url: 'GET /api/v1/graph/{from_currency}/{to_currency}/last-6-months',
+      exampleRequest: 'GET /api/v1/graph/USD/EUR/last-6-months',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Data%20Visualization/get_api_v1_graph__from_currency___to_currency__last_6_months',
+    },
+    {
+      name: 'Exchange Rate Graph (Last Year)',
+      description: 'Generate a graph of exchange rates for the last year',
+      url: 'GET /api/v1/graph/{from_currency}/{to_currency}/last-year',
+      exampleRequest: 'GET /api/v1/graph/USD/EUR/last-year',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Data%20Visualization/get_api_v1_graph__from_currency___to_currency__last_year',
+    },
+    {
+      name: 'Exchange Rate Graph (Last 5 Years)',
+      description: 'Generate a graph of exchange rates for the last 5 years',
+      url: 'GET /api/v1/graph/{from_currency}/{to_currency}/last-5-years',
+      exampleRequest: 'GET /api/v1/graph/USD/EUR/last-5-years',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Data%20Visualization/get_api_v1_graph__from_currency___to_currency__last_5_years',
     }
   ]
 };
@@ -87,52 +115,38 @@ const DATA_VISUALIZATION_ENDPOINTS: Record<string, ApiEndpoint[]> = {
 const ANALYTICAL_MODEL_ENDPOINTS: Record<string, ApiEndpoint[]> = {
   'Volatility Analysis': [
     {
-      name: 'Volatility Index',
-      description: 'Calculates the volatility index for a currency pair',
-      url: 'GET /api/v1/analytics/volatility/{baseCurrency}/{targetCurrency}?period={days}',
-      exampleRequest: 'GET /api/v1/analytics/volatility/USD/EUR?period=30',
-      documentationLink: '/docs/api/analytics/volatility-index',
+      name: 'Volatility Analysis',
+      description: 'Analyze exchange rate volatility between two currencies',
+      url: 'GET /api/v1/analytics/volatility/{base}/{target}/',
+      exampleRequest: 'GET /api/v1/analytics/volatility/USD/EUR/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Analytical%20Model/get_api_v1_analytics_volatility__base___target__',
     }
   ],
   'Anomaly Detection': [
     {
-      name: 'Detect Anomalies',
-      description: 'Identifies anomalies in exchange rate movements',
-      url: 'GET /api/v1/analytics/anomalies/{baseCurrency}/{targetCurrency}?period={days}',
-      exampleRequest: 'GET /api/v1/analytics/anomalies/USD/JPY?period=90',
-      documentationLink: '/docs/api/analytics/anomaly-detection',
+      name: 'Anomaly Detection',
+      description: 'Detect anomalies in exchange rate data',
+      url: 'POST /api/v2/analytics/anomaly-detection/ \nRequest body: {"base", "target", "days"}',
+      exampleRequest: 'POST /api/v2/analytics/anomaly-detection/ \nRequest body: {"base": "USD", "target": "EUR", "days": 30}',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V2%20-%20Prediction%20Model/post_api_v2_analytics_anomaly_detection_',
     }
   ],
   'Correlation Analysis': [
     {
-      name: 'Currency Correlations',
-      description: 'Analyzes correlations between currency pairs',
-      url: 'GET /api/v1/analytics/correlations/{baseCurrency}/{targetCurrency}',
-      exampleRequest: 'GET /api/v1/analytics/correlations/EUR/USD',
-      documentationLink: '/docs/api/analytics/currency-correlations',
-    },
-    {
-      name: 'Factor Analysis',
-      description: 'Analyzes economic factors affecting currency values',
-      url: 'GET /api/v1/analytics/factors/{baseCurrency}/{targetCurrency}',
-      exampleRequest: 'GET /api/v1/analytics/factors/USD/EUR',
-      documentationLink: '/docs/api/analytics/factor-analysis',
+      name: 'Correlation Analysis',
+      description: 'Analyze correlations between exchange rates and other factors',
+      url: 'GET /api/v2/analytics/correlation/{base}/{target}/',
+      exampleRequest: 'GET /api/v2/analytics/correlation/USD/EUR/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V2%20-%20Prediction%20Model/get_api_v2_analytics_correlation__base___target__',
     }
   ],
   'Forex Prediction': [
     {
-      name: 'Rate Prediction',
-      description: 'Predicts future exchange rates based on historical data',
-      url: 'GET /api/v1/analytics/predict/{baseCurrency}/{targetCurrency}?horizon={days}',
-      exampleRequest: 'GET /api/v1/analytics/predict/USD/EUR?horizon=7',
-      documentationLink: '/docs/api/analytics/rate-prediction',
-    },
-    {
-      name: 'Trend Analysis',
-      description: 'Analyzes trends in currency exchange rates',
-      url: 'GET /api/v1/analytics/trends/{baseCurrency}/{targetCurrency}?period={days}',
-      exampleRequest: 'GET /api/v1/analytics/trends/USD/EUR?period=30',
-      documentationLink: '/docs/api/analytics/trend-analysis',
+      name: 'Forex Prediction',
+      description: 'Get prediction for future exchange rates upto 7 days',
+      url: 'GET /api/v2/analytics/prediction/{base}/{target}/',
+      exampleRequest: 'GET /api/v2/analytics/prediction/USD/EUR/',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V2%20-%20Prediction%20Model/get_api_v2_analytics_prediction__base___target__',
     }
   ]
 };
@@ -140,25 +154,18 @@ const ANALYTICAL_MODEL_ENDPOINTS: Record<string, ApiEndpoint[]> = {
 const ALERT_SYSTEM_ENDPOINTS: Record<string, ApiEndpoint[]> = {
   'Exchange Rate Alerts': [
     {
-      name: 'Create Alert',
-      description: 'Sets up an alert for when an exchange rate reaches a threshold',
-      url: 'POST /api/v1/alerts/create',
-      exampleRequest: 'POST /api/v1/alerts/create\n{\n  "baseCurrency": "USD",\n  "targetCurrency": "EUR",\n  "threshold": 0.85,\n  "email": "user@example.com"\n}',
-      documentationLink: '/docs/api/alerts/create',
+      name: 'Exchange Rate Alert',
+      description: 'Register an alert for when an exchange rate crosses a threshold',
+      url: 'POST /api/v1/alerts/register/ \nRequest body: {"base", "target", "alert_type", "threshold", "email"}',
+      exampleRequest: 'POST /api/v1/alerts/register/ \nRequest body: {"base": "USD", "target": "EUR", "alert_type": "above", "threshold": 0.85, "email": "user@example.com"}',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V2%20-%20Alert%20System/post_api_v1_alerts_register_',
     },
     {
-      name: 'Delete Alert',
-      description: 'Deletes an existing exchange rate alert',
-      url: 'DELETE /api/v1/alerts/{alertId}',
-      exampleRequest: 'DELETE /api/v1/alerts/12345',
-      documentationLink: '/docs/api/alerts/delete',
-    },
-    {
-      name: 'List Alerts',
-      description: 'Lists all active alerts for a user',
-      url: 'GET /api/v1/alerts/list?userId={userId}',
-      exampleRequest: 'GET /api/v1/alerts/list?userId=user@example.com',
-      documentationLink: '/docs/api/alerts/list',
+      name: 'Predicted Exchange Rate Alert',
+      description: 'Register an alert for when a predicted exchange rate crosses a threshold',
+      url: 'POST /api/v1/alerts/register/ \nRequest body: {"base", "target", "alert_type", "threshold", "email"}',
+      exampleRequest: 'POST /api/v1/alerts/register/ \nRequest body: {"base": "USD", "target": "EUR", "alert_type": "above", "threshold": 0.85, "email": "user@example.com"}',
+      documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V2%20-%20Alert%20System/post_api_v1_alerts_register_',
     }
   ]
 };
@@ -289,6 +296,8 @@ export default function MicroservicesPage() {
               <Link 
                 href={endpoint.documentationLink} 
                 className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl transition-colors text-sm w-full"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 View Full Documentation
               </Link>
