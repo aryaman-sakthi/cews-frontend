@@ -147,8 +147,6 @@ export default function Home() {
                 </>
               )}
               <ConversionChart 
-                data={chartData} 
-                rate={rate} 
                 fromCurrency={fromCurrency}
                 toCurrency={toCurrency}
               />
