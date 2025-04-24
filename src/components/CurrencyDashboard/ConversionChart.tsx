@@ -4,6 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { fetchHistoricalExchangeRate } from '@/lib/api';
 
+interface HistoricalDataPoint {
+  date: string;
+  close: number;
+}
+
 interface ChartData {
   date: string;
   value: number;
@@ -47,7 +52,7 @@ export const ConversionChart: React.FC<ConversionChartProps> = ({
       setLoading(true);
       try {
         const historicalData = await fetchHistoricalExchangeRate(fromCurrency, toCurrency);
-        const formattedData = historicalData.map((point: any) => ({
+        const formattedData = historicalData.map((point: HistoricalDataPoint) => ({
           date: point.date,
           value: point.close,
         }));
