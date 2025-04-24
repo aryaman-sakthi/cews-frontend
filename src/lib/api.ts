@@ -1,3 +1,5 @@
+import axios from "axios";
+
 /**
  * Fetches the current exchange rate between two currencies
  */
@@ -610,7 +612,7 @@ export const fetchHistoricalExchangeRate = async (
   toCurrency: string
 ): Promise<HistoricalDataPoint[]> => {
   try {
-    const url = `${API_BASE_URL}/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const url = `https://foresight-backend-v2.devkitty.pro/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
     const response = await axios.post(url);
     console.log(response);
 
@@ -640,26 +642,6 @@ export const fetchHistoricalExchangeRate = async (
     return formattedData;
   } catch (error) {
     console.error('Error fetching historical data:', error);
-
-    // Optional: Return mock data for dev fallback
-    if (USE_MOCK_DATA) {
-      console.log('Using mock historical data');
-      const now = new Date();
-      const mockData: HistoricalDataPoint[] = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(now);
-        date.setDate(now.getDate() - i);
-        return {
-          date: date.toISOString().split('T')[0],
-          open: 1.0 + i * 0.01,
-          high: 1.01 + i * 0.01,
-          low: 0.99 + i * 0.01,
-          close: 1.0 + i * 0.01,
-        };
-      }).reverse();
-
-      return mockData;
-    }
-
     throw error;
   }
 };
