@@ -1,3 +1,5 @@
+import axios from "axios";
+
 /**
  * Fetches the current exchange rate between two currencies
  */
@@ -27,7 +29,7 @@ export const fetchExchangeRate = async (from: string, to: string): Promise<numbe
 };
 
 export interface PredictionValue {
-  timestamp: string;
+    timestamp: string;
   mean: number;
   lower_bound: number;
   upper_bound: number;
@@ -53,6 +55,14 @@ export interface CurrencyPrediction {
   meanSquareError?: number;
   rootMeanSquareError?: number;
   meanAbsoluteError?: number;
+  backtestValues?: PredictionValue[];
+}
+interface HistoricalDataPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
   backtestValues?: PredictionValue[];
 }
 
@@ -740,4 +750,44 @@ export const fetchVolatilityData = async (
     console.error('Error in fetchVolatilityData:', error);
     throw error;
   }
+}; 
+
+export const fetchHistoricalExchangeRate = async (
+  fromCurrency: string,
+  toCurrency: string
+): Promise<HistoricalDataPoint[]> => {
+  try {
+    const url = `https://foresight-backend-v2.devkitty.pro/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const response = await axios.post(url);
+    console.log(response);
+
+
+    // Ensure the data is available
+    const timeSeriesData = response.data?.event?.[0]?.attributes?.data;
+
+    if (!timeSeriesData) {
+      throw new Error('Invalid data format received from API');
+    }
+
+    // Map and format the data to HistoricalDataPoint array
+    const formattedData: HistoricalDataPoint[] = timeSeriesData.map(
+      (entry: { date: string; open: number; high: number; low: number; close: number }) => ({
+        date: entry.date,
+        open: entry.open,
+        high: entry.high,
+        low: entry.low,
+        close: entry.close,
+      })
+    );
+    
+
+    // Sort chronologically (oldest to newest)
+    formattedData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return formattedData;
+  } catch (error) {
+    console.error('Error fetching historical data:', error);
+    throw error;
+  }
 };
+
