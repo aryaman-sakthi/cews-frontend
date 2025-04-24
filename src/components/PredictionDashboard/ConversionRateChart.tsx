@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 interface ChartData {
   date: string;
   value: number;
+  isHistorical?: boolean;
 }
 
 interface ConversionRateChartProps {
@@ -28,15 +29,19 @@ export const ConversionRateChart: React.FC<ConversionRateChartProps> = ({
     );
   }
   
-  // Create comparison data with slight offset or use existing data
-  const comparisonData = data.map(item => ({
+  // Find the current date (separating historical from future predictions)
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Group data for better visualization
+  const chartData = data.map(item => ({
     ...item,
-    comparisonValue: item.value * 0.95 // Create a comparison value that's 5% lower
+    predictedValue: item.isHistorical ? null : item.value,
+    historicalValue: item.isHistorical ? item.value : null
   }));
   
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={comparisonData}>
+      <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
         <XAxis 
           dataKey="date" 
@@ -50,30 +55,48 @@ export const ConversionRateChart: React.FC<ConversionRateChartProps> = ({
           tickFormatter={(value) => value.toFixed(5)}
         />
         <Tooltip 
-          formatter={(value: number) => [`${value.toFixed(5)} ${toCurrency}`, `${fromCurrency} to ${toCurrency}`]}
+          formatter={(value: number, name: string) => {
+            if (name === "Future Prediction") {
+              return [`${value.toFixed(5)} ${toCurrency}`, `Predicted ${fromCurrency} to ${toCurrency}`];
+            } else {
+              return [`${value.toFixed(5)} ${toCurrency}`, `Historical ${fromCurrency} to ${toCurrency}`];
+            }
+          }}
           labelFormatter={(label) => `Date: ${label}`}
           contentStyle={{ backgroundColor: '#2a2a40', border: 'none', borderRadius: '8px' }}
           itemStyle={{ color: '#fff' }}
           labelStyle={{ color: '#9ca3af' }}
         />
+        
+        {/* Reference line for today's date */}
+        <ReferenceLine x={today} stroke="#fff" strokeDasharray="3 3" label={{
+          value: "Today",
+          position: "top",
+          fill: "#fff"
+        }} />
+        
+        {/* Historical data line */}
         <Line
-          name={`Predicted ${toCurrency} Rate`}
+          name="Historical Data"
           type="monotone"
-          dataKey="value"
+          dataKey="historicalValue"
+          stroke="#4ade80"
+          strokeWidth={3}
+          dot={{ r: 3, fill: '#4ade80' }}
+          activeDot={{ r: 6, fill: '#4ade80' }}
+          connectNulls
+        />
+        
+        {/* Future prediction line */}
+        <Line
+          name="Future Prediction"
+          type="monotone"
+          dataKey="predictedValue"
           stroke="#8b5cf6"
           strokeWidth={3}
-          dot={false}
+          dot={{ r: 3, fill: '#8b5cf6' }}
           activeDot={{ r: 6, fill: '#8b5cf6' }}
-        />
-        {/* Add a dashed line for comparison/prediction */}
-        <Line
-          name={`Historical ${toCurrency} Rate`}
-          type="monotone"
-          dataKey="comparisonValue"
-          stroke="#4B5563"
-          strokeWidth={2}
-          strokeDasharray="5 5"
-          dot={false}
+          connectNulls
         />
       </LineChart>
     </ResponsiveContainer>
