@@ -63,13 +63,6 @@ export default function Home() {
     lastUpdated: lastUpdated,
   };
 
-  // Sample chart data that would be updated based on historical rates
-  const chartData = [
-    { date: 'Nov 1', value: rate * 0.95 }, // Simulate historical data based on current rate
-    { date: 'Nov 15', value: rate * 0.97 },
-    { date: 'Nov 30', value: rate },
-  ];
-
   const handleFromCurrencyChange = (currency: string) => {
     if (currency === toCurrency) {
       setToCurrency(fromCurrency); // Swap currencies if same one is selected

@@ -62,7 +62,7 @@ export const ConversionChart: React.FC<ConversionChartProps> = ({
     };
 
     fetchHistoricalData();
-  }, [fromCurrency, toCurrency]);
+  }, [fromCurrency, toCurrency, selectedRange]);
 
   useEffect(() => {
     setFilteredData(filterDataByRange(fullData, selectedRange));
