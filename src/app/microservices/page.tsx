@@ -13,13 +13,16 @@ interface ApiEndpoint {
   copyUrl?: string; // Optional field for the URL to copy (without HTTP method)
 }
 
+// Backend API base URL
+const BACKEND_API_URL = "https://foresight-backend-v2.devkitty.pro";
+
 // Data for the API endpoints
 const DATA_COLLECTION_ENDPOINTS: Record<string, ApiEndpoint[]> = {
   'Currency Exchange': [
     {
       name: 'Latest Exchange Rate',
       description: 'Retrieves the current exchange rate between two currencies',
-      url: 'GET /api/v1/currency/rates/{base}/{target}/',
+      url: `GET /api/v1/currency/rates/{base}/{target}/`,
       exampleRequest: 'GET /api/v1/currency/latest/rate/USD/EUR/',
       documentationLink: 'https://app.swaggerhub.com/apis-docs/unsw-77b/Foresight/1.0.0#/V1%20-%20Currency%20Collector/get_api_v1_currency_rates__base___target__',
     },
@@ -225,7 +228,7 @@ export default function MicroservicesPage() {
   const renderEndpoints = (endpoints: ApiEndpoint[]) => {
     // Function to copy URL to clipboard with toast notification
     const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text)
+      navigator.clipboard.writeText(`${BACKEND_API_URL}${text}`)
         .then(() => {
           // Show toast notification
           setToast({
@@ -327,6 +330,11 @@ export default function MicroservicesPage() {
             This API provides currency exchange rates, predictions, volatility analysis, and other financial data. It follows the ADAGE 3.0
             data model for standardized financial data exchange.
           </p>
+        </div>
+
+        {/* Simple Backend URL Display - Centered */}
+        <div className="mb-8 text-white text-center">
+          <h2 className="text-xl mb-2">Backend URL: {BACKEND_API_URL}</h2>
         </div>
 
         {/* Render all sections */}
