@@ -1,57 +1,39 @@
-// src/lib/api.ts
-import axios from 'axios';
+import axios from "axios";
 
-// Configure API URL - can be overridden with environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-
-// Flag to enable mock data when backend is not available
-const USE_MOCK_DATA = true; // Set to false when backend is ready
-
-export const fetchExchangeRate = async (fromCurrency: string, toCurrency: string): Promise<number> => {
+/**
+ * Fetches the current exchange rate between two currencies
+ */
+export const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/exchange/${fromCurrency}/${toCurrency}`);
-    return response.data.rate;
-  } catch (error) {
-    console.error('Error fetching exchange rate:', error);
+    console.log(`Fetching exchange rate from ${from} to ${to}`);
     
-    // Return mock data if backend is unavailable
-    if (USE_MOCK_DATA) {
-      console.log('Using mock exchange rate data');
-      // Generate a realistic exchange rate based on currency pair
-      const mockRates: Record<string, number> = {
-        'USDEUR': 0.91,
-        'USDGBP': 0.77,
-        'USDAUD': 1.52,
-        'USDJPY': 154.65,
-        'USDCAD': 1.36,
-        'USDCHF': 0.90,
-        'USDCNY': 7.24,
-        'EURAUD': 1.66,
-        'EURGBP': 0.85
-      };
-      
-      const pair = `${fromCurrency}${toCurrency}`;
-      const inversePair = `${toCurrency}${fromCurrency}`;
-      
-      if (mockRates[pair]) {
-        return mockRates[pair];
-      } else if (mockRates[inversePair]) {
-        return 1 / mockRates[inversePair];
-      } else {
-        // Generate a random but realistic rate if pair not found
-        return Math.random() * 2 + 0.5;
-      }
+    // Use the proxy API route to avoid CORS issues
+    const response = await fetch(`/api/exchange-rate?from=${from}&to=${to}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching exchange rate: ${response.status}`);
     }
     
-    throw error;
+    const data = await response.json();
+    
+    if (data.rate !== undefined) {
+      console.log(`Exchange rate found: ${data.rate}`);
+      return data.rate;
+    }
+    
+    throw new Error(data.error || 'No exchange rate found in response');
+  } catch (error) {
+    console.error('Failed to fetch exchange rate:', error);
+    throw error; // Propagate the error to the component
   }
 };
 
 export interface PredictionValue {
-  timestamp: string;
+    timestamp: string;
   mean: number;
   lower_bound: number;
   upper_bound: number;
+  isHistorical?: boolean;
 }
 
 export interface InfluencingFactor {
@@ -73,6 +55,7 @@ export interface CurrencyPrediction {
   meanSquareError?: number;
   rootMeanSquareError?: number;
   meanAbsoluteError?: number;
+  backtestValues?: PredictionValue[];
 }
 interface HistoricalDataPoint {
   date: string;
@@ -80,7 +63,152 @@ interface HistoricalDataPoint {
   high: number;
   low: number;
   close: number;
+  backtestValues?: PredictionValue[];
 }
+
+// Interface for Currency News Articles
+export interface NewsArticle {
+  title: string;
+  source: string;
+  url: string;
+  summary: string;
+  sentiment_score: number;
+  sentiment_label: string;
+  currency: string;
+}
+
+// Interface for Currency News API Response (ADAGE 3.0 format from Django backend)
+export interface CurrencyNewsResponse {
+  data_source: string;
+  dataset_type: string;
+  dataset_id: string;
+  time_object: {
+    timestamp: string;
+    timezone: string;
+  };
+  events: Array<{
+    time_object: {
+      timestamp: string;
+      duration: number;
+      duration_unit: string;
+      timezone: string;
+    };
+    event_type: string;
+    event_id: string;
+    attributes: {
+      title: string;
+      source: string;
+      url: string;
+      summary: string;
+      sentiment_score: number;
+      sentiment_label: string;
+      currency: string;
+    };
+  }>;
+}
+
+// Fetch currency news for a specific currency (one currency at a time)
+export const fetchCurrencyNews = async (
+  currency: string,
+  limit: number = 10,
+  sentimentScore?: number
+): Promise<NewsArticle[]> => {
+  try {
+    console.log(`Fetching news for currency: ${currency}, limit: ${limit}`);
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    queryParams.append('currency', currency);
+    queryParams.append('limit', limit.toString());
+    
+    if (sentimentScore !== undefined) {
+      queryParams.append('sentiment_score', sentimentScore.toString());
+    }
+    
+    // Use the proxy API route to avoid CORS issues
+    const response = await fetch(`/api/currency-news?${queryParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching currency news: ${response.status}`);
+    }
+    
+    const data: CurrencyNewsResponse = await response.json();
+    
+    // Process the news data from ADAGE format
+    if (data.events && data.events.length > 0) {
+      return data.events.map(event => ({
+        title: event.attributes.title,
+        source: event.attributes.source,
+        url: event.attributes.url,
+        summary: event.attributes.summary,
+        sentiment_score: event.attributes.sentiment_score,
+        sentiment_label: event.attributes.sentiment_label,
+        currency: event.attributes.currency
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`Failed to fetch currency news for ${currency}:`, error);
+    throw error;
+  }
+};
+
+// Fetch news for a currency pair (by making two separate requests)
+export const fetchCurrencyPairNews = async (
+  fromCurrency: string,
+  toCurrency: string,
+  limit: number = 3
+): Promise<NewsArticle[]> => {
+  try {
+    console.log(`Fetching news for currency pair: ${fromCurrency}/${toCurrency}`);
+    
+    // Make two separate requests for each currency
+    const [fromNewsResponse, toNewsResponse] = await Promise.all([
+      fetch(`/api/currency-news?currency=${fromCurrency}&limit=${limit}`),
+      fetch(`/api/currency-news?currency=${toCurrency}&limit=${limit}`)
+    ]);
+    
+    // Check if either request failed
+    if (!fromNewsResponse.ok || !toNewsResponse.ok) {
+      const errorStatus = !fromNewsResponse.ok ? 
+        fromNewsResponse.status : toNewsResponse.status;
+      throw new Error(`Error fetching currency news: ${errorStatus}`);
+    }
+    
+    // Parse both responses
+    const fromData: CurrencyNewsResponse = await fromNewsResponse.json();
+    const toData: CurrencyNewsResponse = await toNewsResponse.json();
+    
+    // Combine events from both responses
+    const combinedEvents = [
+      ...(fromData.events || []),
+      ...(toData.events || [])
+    ];
+    
+    // Sort by timestamp, newest first
+    combinedEvents.sort((a, b) => {
+      return new Date(b.time_object.timestamp).getTime() - 
+             new Date(a.time_object.timestamp).getTime();
+    });
+    
+    // Convert to NewsArticle format
+    const articles = combinedEvents.map(event => ({
+      title: event.attributes.title,
+      source: event.attributes.source,
+      url: event.attributes.url,
+      summary: event.attributes.summary,
+      sentiment_score: event.attributes.sentiment_score,
+      sentiment_label: event.attributes.sentiment_label,
+      currency: event.attributes.currency
+    }));
+    
+    return articles;
+  } catch (error) {
+    console.error(`Failed to fetch news for currency pair ${fromCurrency}/${toCurrency}:`, error);
+    throw error;
+  }
+};
 
 // New interface for Volatility Analysis
 export interface VolatilityAnalysis {
@@ -116,105 +244,30 @@ export interface CorrelationAnalysis {
   };
 }
 
-// Generate mock prediction data
-const generateMockPrediction = (fromCurrency: string, toCurrency: string): CurrencyPrediction => {
-  // Generate a base rate
-  const baseRate = Math.random() * 2 + 0.5;
-  
-  // Generate dates for next 7 days
-  const dates: string[] = [];
-  const values: number[] = [];
-  const now = new Date();
-  
-  for (let i = 0; i < 7; i++) {
-    const date = new Date();
-    date.setDate(now.getDate() + i + 1);
-    dates.push(date.toISOString().split('T')[0]);
-    
-    // Generate a slightly changing rate with some randomness
-    const volatility = 0.005; // 0.5% daily volatility
-    const trend = 0.001; // slight upward trend
-    const dayChange = (Math.random() - 0.5) * 2 * volatility + trend;
-    values.push(baseRate * (1 + dayChange * i));
-  }
-  
-  // Create prediction values
-  const predictionValues: PredictionValue[] = dates.map((date, i) => {
-    const mean = values[i];
-    return {
-      timestamp: date,
-      mean,
-      lower_bound: mean * 0.97, // 3% below mean
-      upper_bound: mean * 1.03, // 3% above mean
-    };
-  });
-  
-  // Create influencing factors
-  const factors: InfluencingFactor[] = [
-    {
-      factor_name: "Economic Indicators",
-      impact_level: "high",
-      used_in_prediction: true
-    },
-    {
-      factor_name: "Market Sentiment",
-      impact_level: "medium",
-      used_in_prediction: true
-    },
-    {
-      factor_name: "Historical Volatility",
-      impact_level: "medium",
-      used_in_prediction: true
-    }
-  ];
-  
-  return {
-    baseCurrency: fromCurrency,
-    targetCurrency: toCurrency,
-    currentRate: baseRate,
-    changePercent: 1.2,
-    confidenceScore: Math.round(Math.random() * 15 + 70), // 70-85%
-    modelVersion: "Statistical Model v2",
-    inputDataRange: "2023-01-01 to 2024-03-31",
-    influencingFactors: factors,
-    predictionValues,
-    meanSquareError: 0.00025,
-    rootMeanSquareError: 0.0158,
-    meanAbsoluteError: 0.0122
-  };
-};
+export interface AnomalyPoint {
+  timestamp: string;
+  rate: number;
+  z_score: number;
+  percent_change: number;
+}
 
-// Generate mock volatility data
-const generateMockVolatilityAnalysis = (baseCurrency: string, targetCurrency: string): VolatilityAnalysis => {
-  // Generate random but realistic volatility values
-  const currentVolatility = Math.random() * 15 + 5; // Between 5-20%
-  const averageVolatility = currentVolatility * (0.8 + Math.random() * 0.4); // Slightly different
+export interface AnomalyDetectionResult {
+  base: string;
+  target: string;
+  anomaly_count: number;
+  analysis_period_days: number;
+  anomaly_points: AnomalyPoint[];
+}
 
-  // Determine volatility level based on current value
-  let volatilityLevel: 'NORMAL' | 'HIGH' | 'EXTREME';
-  if (currentVolatility < 10) {
-    volatilityLevel = 'NORMAL';
-  } else if (currentVolatility < 15) {
-    volatilityLevel = 'HIGH';
-  } else {
-    volatilityLevel = 'EXTREME';
-  }
-
-  // Random trend
-  const trends: Array<'STABLE' | 'INCREASING' | 'DECREASING'> = ['STABLE', 'INCREASING', 'DECREASING'];
-  const trend = trends[Math.floor(Math.random() * trends.length)];
-
-  return {
-    baseCurrency,
-    targetCurrency,
-    currentVolatility,
-    averageVolatility,
-    volatilityLevel,
-    analysisPeriodDays: 30,
-    trend,
-    confidenceScore: Math.round(Math.random() * 20 + 75) // 75-95%
-  };
-};
+export interface VolatilityData {
+  base: string;
+  target: string;
+  volatility: {
+    date: string;
+    value: number;
+  }[];
+  period_days: number;
+}
 
 export const fetchCurrencyPrediction = async (
   fromCurrency: string, 
@@ -223,12 +276,15 @@ export const fetchCurrencyPrediction = async (
     refresh?: boolean, 
     forecastHorizon?: number, 
     model?: 'arima' | 'statistical' | 'auto', 
-    confidence?: number
+    confidence?: number,
+    backtest?: boolean
   }
 ): Promise<CurrencyPrediction> => {
   try {
     // Build query parameters
     const queryParams = new URLSearchParams();
+    queryParams.append('from', fromCurrency);
+    queryParams.append('to', toCurrency);
     
     if (options?.refresh) {
       queryParams.append('refresh', 'true');
@@ -246,41 +302,71 @@ export const fetchCurrencyPrediction = async (
       queryParams.append('confidence', options.confidence.toString());
     }
     
-    const queryString = queryParams.toString();
-    const url = `${API_BASE_URL}/api/prediction/${fromCurrency}/${toCurrency}${queryString ? `?${queryString}` : ''}`;
+    if (options?.backtest) {
+      queryParams.append('backtest', 'true');
+    }
     
-    const response = await axios.get(url);
+    // Add timestamp to prevent browser caching
+    queryParams.append('_t', Date.now().toString());
+    
+    // Use the proxy API route to avoid CORS issues
+    console.log(`Fetching prediction data for ${fromCurrency}/${toCurrency}`);
+    const response = await fetch(`/api/prediction?${queryParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching prediction: ${response.status}`);
+    }
+    
+    const data = await response.json();
     
     // Extract the first event from the ADAGE response
-    const event = response.data.events[0];
+    const event = data.events[0];
     const attributes = event.attributes;
     
+    // Log all attributes for debugging
+    console.log('All prediction attributes:', attributes);
+    
+    // Specifically check confidence_score value
+    console.log(`Confidence score in attributes: ${attributes.confidence_score}, type: ${typeof attributes.confidence_score}`);
+    
+    // Check for backtest data in the attributes
+    const backtest_values = attributes.backtest_values || [];
+    
+    // Add historical flag to backtest values
+    const backtestValuesWithFlag = backtest_values.map((value: PredictionValue) => ({
+      ...value,
+      isHistorical: true
+    }));
+    
+    // Add future flag to prediction values
+    const predictionValuesWithFlag = attributes.prediction_values.map((value: PredictionValue) => ({
+      ...value,
+      isHistorical: false
+    }));
+    
     // Transform to our frontend model
-    return {
+    const prediction = {
       baseCurrency: attributes.base_currency,
       targetCurrency: attributes.target_currency,
       currentRate: attributes.current_rate,
       changePercent: attributes.change_percent,
-      confidenceScore: attributes.confidence_score,
+      confidenceScore: Number(attributes.confidence_score),
       modelVersion: attributes.model_version,
       inputDataRange: attributes.input_data_range,
       influencingFactors: attributes.influencing_factors,
-      predictionValues: attributes.prediction_values,
+      predictionValues: predictionValuesWithFlag,
       meanSquareError: attributes.mean_square_error,
       rootMeanSquareError: attributes.root_mean_square_error,
-      meanAbsoluteError: attributes.mean_absolute_error
+      meanAbsoluteError: attributes.mean_absolute_error,
+      backtestValues: backtestValuesWithFlag
     };
+    
+    // Log the transformed prediction object
+    console.log(`Returning prediction with confidence score: ${prediction.confidenceScore}`);
+    
+    return prediction;
   } catch (error) {
-    console.error('Error fetching currency prediction:', error);
-    
-    // Return mock data if backend is unavailable
-    if (USE_MOCK_DATA) {
-      console.log(`Using mock prediction data for ${fromCurrency}/${toCurrency}`);
-      // Add a small delay to simulate network request
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return generateMockPrediction(fromCurrency, toCurrency);
-    }
-    
+    console.error('Error fetching prediction:', error);
     throw error;
   }
 };
@@ -291,11 +377,24 @@ export const fetchVolatilityAnalysis = async (
   days: number = 30
 ): Promise<VolatilityAnalysis> => {
   try {
-    const url = `${API_BASE_URL}/api/v1/analytics/volatility/${baseCurrency}/${targetCurrency}?days=${days}`;
-    const response = await axios.get(url);
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    queryParams.append('base', baseCurrency);
+    queryParams.append('target', targetCurrency);
+    queryParams.append('days', days.toString());
+    
+    // Use the proxy API route to avoid CORS issues
+    console.log(`Fetching volatility data for ${baseCurrency}/${targetCurrency}`);
+    const response = await fetch(`/api/volatility?${queryParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching volatility analysis: ${response.status}`);
+    }
+    
+    const data = await response.json();
     
     // Extract the first event from the ADAGE response
-    const event = response.data.events[0];
+    const event = data.events[0];
     const attrs = event.attributes;
     
     // Transform to our frontend model
@@ -311,73 +410,8 @@ export const fetchVolatilityAnalysis = async (
     };
   } catch (error) {
     console.error('Error fetching volatility analysis:', error);
-    
-    // Return mock data if backend is unavailable
-    if (USE_MOCK_DATA) {
-      console.log(`Using mock volatility data for ${baseCurrency}/${targetCurrency}`);
-      // Add a small delay to simulate network request
-      await new Promise(resolve => setTimeout(resolve, 300));
-      return generateMockVolatilityAnalysis(baseCurrency, targetCurrency);
-    }
-    
     throw error;
   }
-};
-
-// Generate mock correlation data
-const generateMockCorrelationAnalysis = (baseCurrency: string, targetCurrency: string): CorrelationAnalysis => {
-  // Generate random but realistic correlation values
-  const generateCorrelation = () => Math.round((Math.random() * 1.6 - 0.8) * 100) / 100;
-  
-  // Create mock factors
-  const factors: CorrelationFactor[] = [
-    { factor: 'GDP Growth', correlation: generateCorrelation(), type: 'economic' },
-    { factor: 'Inflation Rate', correlation: generateCorrelation(), type: 'economic' },
-    { factor: 'Interest Rate', correlation: generateCorrelation(), type: 'economic' },
-    { factor: 'Trade Balance', correlation: generateCorrelation(), type: 'economic' },
-    { factor: 'Market Sentiment', correlation: generateCorrelation(), type: 'news' }
-  ];
-  
-  // Sort factors by absolute correlation value
-  factors.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
-  
-  // Create mock news sentiment correlations
-  const newsSentiment: Record<string, number> = {
-    'positive_news': generateCorrelation(),
-    'negative_news': generateCorrelation(),
-    'neutral_news': generateCorrelation(),
-    'financial_news': generateCorrelation(),
-    'political_news': generateCorrelation()
-  };
-  
-  // Create mock economic indicator correlations
-  const economicIndicators: Record<string, number> = {
-    'gdp_growth': generateCorrelation(),
-    'inflation_rate': generateCorrelation(),
-    'interest_rate': generateCorrelation(),
-    'unemployment': generateCorrelation(),
-    'trade_balance': generateCorrelation()
-  };
-  
-  // Create mock volatility news correlations
-  const volatilityNews: Record<string, number> = {
-    'market_volatility': generateCorrelation(),
-    'news_sentiment_volatility': generateCorrelation()
-  };
-
-  return {
-    baseCurrency,
-    targetCurrency,
-    confidenceScore: Math.round(Math.random() * 25 + 70), // 70-95%
-    dataCompleteness: Math.round(Math.random() * 30 + 70), // 70-100%
-    analysisPeriodDays: 90,
-    influencingFactors: factors,
-    correlations: {
-      news_sentiment: newsSentiment,
-      economic_indicators: economicIndicators,
-      volatility_news: volatilityNews
-    }
-  };
 };
 
 export const fetchCorrelationAnalysis = async (
@@ -391,6 +425,8 @@ export const fetchCorrelationAnalysis = async (
   try {
     // Build query parameters
     const queryParams = new URLSearchParams();
+    queryParams.append('base', baseCurrency);
+    queryParams.append('target', targetCurrency);
     
     if (options?.refresh) {
       queryParams.append('refresh', 'true');
@@ -400,92 +436,113 @@ export const fetchCorrelationAnalysis = async (
       queryParams.append('lookback_days', options.lookbackDays.toString());
     }
     
-    const queryString = queryParams.toString();
-    const url = `${API_BASE_URL}/api/v2/analytics/correlation/${baseCurrency}/${targetCurrency}${queryString ? `?${queryString}` : ''}`;
+    // Add timestamp to prevent caching
+    queryParams.append('_t', Date.now().toString());
     
-    const response = await axios.get(url);
+    // Use the proxy API route to avoid CORS issues
+    console.log(`Fetching correlation data for ${baseCurrency}/${targetCurrency}`);
     
-    // Extract the first event from the ADAGE response
-    const event = response.data.events[0];
-    const attrs = event.attributes;
+    // Add a timeout to the fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.warn('Correlation request timed out');
+    }, 10000); // 10 second timeout
     
-    // Transform to our frontend model
-    return {
-      baseCurrency: attrs.base_currency,
-      targetCurrency: attrs.target_currency,
-      confidenceScore: attrs.confidence_score,
-      dataCompleteness: attrs.data_completeness,
-      analysisPeriodDays: attrs.analysis_period_days,
-      influencingFactors: attrs.influencing_factors,
-      correlations: attrs.correlations
-    };
-  } catch (error) {
-    console.error('Error fetching correlation analysis:', error);
-    
-    // Return mock data if backend is unavailable
-    if (USE_MOCK_DATA) {
-      console.log(`Using mock correlation data for ${baseCurrency}/${targetCurrency}`);
-      // Add a small delay to simulate network request
-      await new Promise(resolve => setTimeout(resolve, 400));
-      return generateMockCorrelationAnalysis(baseCurrency, targetCurrency);
+    try {
+      const response = await fetch(`/api/correlation?${queryParams.toString()}`, {
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.warn(`Error fetching correlation analysis: ${response.status}`);
+        
+        // Return a default empty response structure instead of throwing an error
+        return createEmptyCorrelationData(baseCurrency, targetCurrency, options?.lookbackDays || 90);
+      }
+      
+      const data = await response.json();
+      
+      // Validate response structure
+      if (!data || !data.events || !data.events[0]) {
+        console.warn('Invalid correlation API response structure', data);
+        return createEmptyCorrelationData(baseCurrency, targetCurrency, options?.lookbackDays || 90);
+      }
+      
+      // Try to safely extract attributes
+      interface CorrelationAttributes {
+        base_currency?: string;
+        target_currency?: string;
+        confidence_score?: number;
+        data_completeness?: number;
+        analysis_period_days?: number;
+        influencing_factors?: CorrelationFactor[];
+        correlations?: {
+          news_sentiment: Record<string, number>;
+          economic_indicators: Record<string, number>;
+          volatility_news: Record<string, number>;
+        };
+      }
+      
+      let attrs: CorrelationAttributes = {};
+      try {
+        attrs = data.events[0].attributes || {};
+      } catch (e) {
+        console.warn('Could not extract attributes from correlation data', e);
+        return createEmptyCorrelationData(baseCurrency, targetCurrency, options?.lookbackDays || 90);
+      }
+      
+      // Validate that required fields exist, if not, provide defaults
+      const baseCurrencyResult = attrs.base_currency || baseCurrency;
+      const targetCurrencyResult = attrs.target_currency || targetCurrency;
+      
+      // Transform to our frontend model with default values for missing fields
+      return {
+        baseCurrency: baseCurrencyResult,
+        targetCurrency: targetCurrencyResult,
+        confidenceScore: attrs.confidence_score || 0,
+        dataCompleteness: attrs.data_completeness || 0,
+        analysisPeriodDays: attrs.analysis_period_days || 90,
+        influencingFactors: Array.isArray(attrs.influencing_factors) ? attrs.influencing_factors : [],
+        correlations: attrs.correlations || {
+          news_sentiment: {},
+          economic_indicators: {},
+          volatility_news: {}
+        }
+      };
+    } catch (fetchError) {
+      // Clear the timeout if fetch fails
+      clearTimeout(timeoutId);
+      
+      console.warn('Fetch error in correlation analysis:', fetchError);
+      return createEmptyCorrelationData(baseCurrency, targetCurrency, options?.lookbackDays || 90);
     }
-    
-    throw error;
+  } catch (error) {
+    console.error('General error in fetchCorrelationAnalysis:', error);
+    return createEmptyCorrelationData(baseCurrency, targetCurrency, options?.lookbackDays || 90);
   }
 };
 
-export interface AnomalyPoint {
-  timestamp: string;
-  rate: number;
-  z_score: number;
-  percent_change: number;
-}
-
-export interface AnomalyDetectionResult {
-  base: string;
-  target: string;
-  anomaly_count: number;
-  analysis_period_days: number;
-  anomaly_points: AnomalyPoint[];
-}
-
-// Generate mock anomaly detection data
-const generateMockAnomalyDetection = (baseCurrency: string, targetCurrency: string): AnomalyDetectionResult => {
-  // Generate 1-4 random anomalies
-  const anomalyCount = Math.floor(Math.random() * 4) + 1;
-  const anomalyPoints: AnomalyPoint[] = [];
-  
-  // Generate dates for the past 30 days
-  const now = new Date();
-  const possibleDays = [];
-  
-  for (let i = 0; i < 30; i++) {
-    const date = new Date();
-    date.setDate(now.getDate() - i);
-    possibleDays.push(date);
-  }
-  
-  // Shuffle and take a subset of days for anomalies
-  const shuffledDays = possibleDays.sort(() => 0.5 - Math.random()).slice(0, anomalyCount);
-  
-  // Create anomaly points
-  for (const day of shuffledDays) {
-    anomalyPoints.push({
-      timestamp: day.toISOString(),
-      rate: Math.random() * 2 + 0.5,
-      z_score: (Math.random() * 2 + 2) * (Math.random() < 0.5 ? -1 : 1), // Between 2-4 or -2 to -4
-      percent_change: Math.random() * 6 + 2 // 2-8% change
-    });
-  }
-  
+// Helper function to create empty correlation data
+function createEmptyCorrelationData(base: string, target: string, days: number): CorrelationAnalysis {
   return {
-    base: baseCurrency,
-    target: targetCurrency,
-    anomaly_count: anomalyCount,
-    analysis_period_days: 30,
-    anomaly_points: anomalyPoints
+    baseCurrency: base,
+    targetCurrency: target,
+    confidenceScore: 0,
+    dataCompleteness: 0,
+    analysisPeriodDays: days,
+    influencingFactors: [],
+    correlations: {
+      news_sentiment: {},
+      economic_indicators: {},
+      volatility_news: {}
+    }
   };
-};
+}
 
 export const fetchAnomalyDetection = async (
   baseCurrency: string,
@@ -493,41 +550,204 @@ export const fetchAnomalyDetection = async (
   days: number = 30
 ): Promise<AnomalyDetectionResult> => {
   try {
+    // Build query parameters
     const queryParams = new URLSearchParams();
+    queryParams.append('base', baseCurrency);
+    queryParams.append('target', targetCurrency);
     queryParams.append('days', days.toString());
     
-    const url = `${API_BASE_URL}/v2/analytics/anomaly-detection/${baseCurrency}/${targetCurrency}?${queryParams.toString()}`;
+    // Add timestamp to prevent caching
+    queryParams.append('_t', Date.now().toString());
     
-    const response = await axios.post(url, {
+    console.log(`Fetching anomaly data for ${baseCurrency}/${targetCurrency} (${days} days)`);
+    
+    // Add a timeout to the fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.error('Anomaly detection request timed out');
+    }, 10000); // 10 second timeout
+    
+    try {
+      const response = await fetch(`/api/anomalies?${queryParams.toString()}`, {
+        method: 'POST',
+        signal: controller.signal,
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`Error fetching anomaly data: ${response.status}`, errorText);
+        
+        // Return default empty result instead of throwing error
+        return {
+          base: baseCurrency,
+          target: targetCurrency,
+          anomaly_count: 0,
+          analysis_period_days: days,
+          anomaly_points: []
+        };
+      }
+      
+      const data = await response.json();
+      console.log(`Received anomaly data for ${baseCurrency}/${targetCurrency}:`, data);
+      
+      // Validate minimum data structure
+      if (!data || (typeof data !== 'object')) {
+        console.warn('Invalid anomaly detection response structure', data);
+        // Return default empty result
+        return {
+          base: baseCurrency,
+          target: targetCurrency,
+          anomaly_count: 0,
+          analysis_period_days: days,
+          anomaly_points: []
+        };
+      }
+      
+      // Check if we received an error object from the API
+      if (data.error) {
+        console.warn(`Received error from anomaly API: ${data.error}`);
+        // Return default empty result
+        return {
+          base: baseCurrency,
+          target: targetCurrency,
+          anomaly_count: 0,
+          analysis_period_days: days,
+          anomaly_points: []
+        };
+      }
+      
+      // Check if we got a valid response with at least the minimal required fields
+      if (!('base' in data) || !('target' in data)) {
+        console.warn('Missing required fields in anomaly data', data);
+        
+        // Create a fallback object since data is missing required fields
+        return {
+          base: baseCurrency,
+          target: targetCurrency,
+          anomaly_count: 0,
+          analysis_period_days: days,
+          anomaly_points: []
+        };
+      }
+      
+      // Ensure anomaly_points is at least an empty array if it's missing
+      if (!('anomaly_points' in data) || !Array.isArray(data.anomaly_points)) {
+        console.warn('Missing anomaly_points array in response, using empty array', data);
+        data.anomaly_points = [];
+      }
+      
+      // Ensure anomaly_count exists
+      if (!('anomaly_count' in data)) {
+        data.anomaly_count = data.anomaly_points.length;
+      }
+      
+      // Ensure analysis_period_days exists
+      if (!('analysis_period_days' in data)) {
+        data.analysis_period_days = days;
+      }
+      
+      return data as AnomalyDetectionResult;
+    } catch (fetchError) {
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      // Handle timeout or network errors gracefully
+      console.warn('Fetch error in anomaly detection:', fetchError);
+      
+      // Return default empty result for any fetch error
+      return {
+        base: baseCurrency,
+        target: targetCurrency,
+        anomaly_count: 0,
+        analysis_period_days: days,
+        anomaly_points: []
+      };
+    }
+  } catch (error) {
+    console.error('Error in fetchAnomalyDetection:', error);
+    
+    // Return default empty result as final fallback
+    return {
       base: baseCurrency,
       target: targetCurrency,
-      days: days
+      anomaly_count: 0,
+      analysis_period_days: days,
+      anomaly_points: []
+    };
+  }
+};
+
+export const fetchVolatilityData = async (
+  baseCurrency: string,
+  targetCurrency: string,
+  days: number = 30
+): Promise<VolatilityData> => {
+  try {
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    queryParams.append('base', baseCurrency);
+    queryParams.append('target', targetCurrency);
+    queryParams.append('days', days.toString());
+    
+    // Add timestamp to prevent caching
+    queryParams.append('_t', Date.now().toString());
+    
+    console.log(`Fetching volatility data for ${baseCurrency}/${targetCurrency} (${days} days)`);
+    
+    // Add a timeout to the fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.error('Volatility data request timed out');
+    }, 10000); // 10 second timeout
+    
+    const response = await fetch(`/api/volatility?${queryParams.toString()}`, {
+      method: 'POST',
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
     
-    // Extract the data from the ADAGE response
-    const adageData = response.data;
-    const event = adageData.events[0];
-    const attrs = event.attributes;
+    // Clear the timeout
+    clearTimeout(timeoutId);
     
-    // Transform to our frontend model
-    return {
-      base: attrs.base_currency,
-      target: attrs.target_currency,
-      anomaly_count: attrs.anomaly_count,
-      analysis_period_days: attrs.analysis_period_days,
-      anomaly_points: attrs.anomaly_points
-    };
-  } catch (error) {
-    console.error('Error fetching anomaly detection:', error);
-    
-    // Return mock data if backend is unavailable
-    if (USE_MOCK_DATA) {
-      console.log(`Using mock anomaly data for ${baseCurrency}/${targetCurrency}`);
-      // Add a small delay to simulate network request
-      await new Promise(resolve => setTimeout(resolve, 400));
-      return generateMockAnomalyDetection(baseCurrency, targetCurrency);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error fetching volatility data: ${response.status}`, errorText);
+      
+      // Return specific error messages based on status codes
+      if (response.status === 504) {
+        throw new Error('Volatility data request timed out. The server might be overloaded or temporarily unavailable.');
+      } else if (response.status === 404) {
+        throw new Error(`No volatility data available for ${baseCurrency}/${targetCurrency}`);
+      } else if (response.status >= 500) {
+        throw new Error('Server error while fetching volatility data. Please try again later.');
+      } else {
+        throw new Error(`Failed to fetch volatility data: ${response.status}`);
+      }
     }
     
+    const data = await response.json();
+    
+    // Validate minimum data structure
+    if (!data || !data.volatility) {
+      console.warn('Invalid volatility response structure', data);
+      throw new Error(`No valid volatility data available for ${baseCurrency}/${targetCurrency}`);
+    }
+    
+    return data as VolatilityData;
+  } catch (error) {
+    console.error('Error in fetchVolatilityData:', error);
     throw error;
   }
 }; 
@@ -537,7 +757,7 @@ export const fetchHistoricalExchangeRate = async (
   toCurrency: string
 ): Promise<HistoricalDataPoint[]> => {
   try {
-    const url = `${API_BASE_URL}/api/v2/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const url = `https://foresight-backend-v2.devkitty.pro/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
     const response = await axios.post(url);
     console.log(response);
 
@@ -567,26 +787,6 @@ export const fetchHistoricalExchangeRate = async (
     return formattedData;
   } catch (error) {
     console.error('Error fetching historical data:', error);
-
-    // Optional: Return mock data for dev fallback
-    if (USE_MOCK_DATA) {
-      console.log('Using mock historical data');
-      const now = new Date();
-      const mockData: HistoricalDataPoint[] = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(now);
-        date.setDate(now.getDate() - i);
-        return {
-          date: date.toISOString().split('T')[0],
-          open: 1.0 + i * 0.01,
-          high: 1.01 + i * 0.01,
-          low: 0.99 + i * 0.01,
-          close: 1.0 + i * 0.01,
-        };
-      }).reverse();
-
-      return mockData;
-    }
-
     throw error;
   }
 };

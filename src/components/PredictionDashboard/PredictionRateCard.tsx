@@ -7,6 +7,7 @@ interface PredictionRate {
   high: number;
   mean: number;
   low: number;
+  isHistorical?: boolean;
 }
 
 interface PredictionRateCardProps {
@@ -18,79 +19,70 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
   predictions,
   initialIndex = 0
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
   
-  const handlePrevious = () => {
-    setCurrentIndex((prev) => (prev === 0 ? predictions.length - 1 : prev - 1));
-  };
+  if (!predictions || predictions.length === 0) {
+    return (
+      <div className="bg-[#2a2a40] rounded-2xl p-6 h-full flex items-center justify-center">
+        <div className="text-gray-400">No prediction data available</div>
+      </div>
+    );
+  }
   
-  const handleNext = () => {
-    setCurrentIndex((prev) => (prev === predictions.length - 1 ? 0 : prev + 1));
-  };
-  
-  const currentPrediction = predictions[currentIndex];
+  const selectedPrediction = predictions[selectedIndex];
   
   return (
-    <div className="bg-[#2a2a40] rounded-2xl p-6 h-full flex flex-col">
-      <h2 className="text-2xl font-bold text-white text-center mb-6 border-b border-gray-700 pb-2">Predicted Rate</h2>
+    <div className="bg-[#2a2a40] rounded-2xl p-6 h-full">
+      <div className="mb-4">
+        <h3 className="text-xl font-bold text-white">Rate Prediction</h3>
+        <p className="text-gray-400 text-sm">
+          High, mean, and low bounds for each date
+        </p>
+      </div>
       
-      <div className="flex-grow flex flex-col space-y-5 mb-6">
-        {/* High */}
-        <div className="bg-[#1e1e30] rounded-xl p-4">
-          <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">High</div>
-            <div className="text-2xl font-bold text-green-300">
-              {currentPrediction.high.toFixed(7)}
+      <div className="mb-4 flex justify-between items-center">
+        <div className="text-indigo-400 font-medium">
+          {selectedPrediction.date}
+          {selectedPrediction.isHistorical && (
+            <span className="ml-2 bg-green-500 text-white text-xs py-1 px-2 rounded-full">Historical</span>
+          )}
             </div>
           </div>
+      
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="bg-[#2a2a60] p-3 rounded-lg">
+          <div className="text-gray-400 text-xs mb-1">High</div>
+          <div className="text-green-400 font-bold">{selectedPrediction.high.toFixed(5)}</div>
         </div>
-        
-        {/* Mean */}
-        <div className="bg-[#1e1e30] rounded-xl p-4">
-          <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">Mean</div>
-            <div className="text-2xl font-bold text-green-300">
-              {currentPrediction.mean.toFixed(7)}
-            </div>
-          </div>
+        <div className="bg-[#3a3a70] p-3 rounded-lg">
+          <div className="text-gray-400 text-xs mb-1">Mean</div>
+          <div className="text-purple-400 font-bold">{selectedPrediction.mean.toFixed(5)}</div>
         </div>
-        
-        {/* Low */}
-        <div className="bg-[#1e1e30] rounded-xl p-4">
-          <div className="text-center">
-            <div className="text-sm text-gray-400 mb-2">Low</div>
-            <div className="text-2xl font-bold text-green-300">
-              {currentPrediction.low.toFixed(7)}
-            </div>
-          </div>
+        <div className="bg-[#2a2a60] p-3 rounded-lg">
+          <div className="text-gray-400 text-xs mb-1">Low</div>
+          <div className="text-red-400 font-bold">{selectedPrediction.low.toFixed(5)}</div>
         </div>
       </div>
       
-      {/* Date Navigation */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col">
+        <div className="text-gray-400 text-sm mb-2">Date Selection</div>
+        <div className="grid grid-cols-4 gap-2">
+          {predictions.map((prediction, index) => (
         <button 
-          onClick={handlePrevious}
-          className="w-14 h-14 rounded-full bg-[#393959] flex items-center justify-center text-white hover:bg-indigo-600 transition-colors"
-          aria-label="Previous date"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-          </svg>
+              key={index}
+              onClick={() => setSelectedIndex(index)}
+              className={`p-2 rounded text-center text-xs ${
+                index === selectedIndex 
+                  ? 'bg-indigo-600 text-white' 
+                  : prediction.isHistorical
+                    ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
+                    : 'bg-[#3a3a60] text-gray-300 hover:bg-[#4a4a70]'
+              }`}
+            >
+              {prediction.date.split('/').slice(0, 2).join('/')}
         </button>
-        
-        <div className="bg-[#9696fd]/20 px-10 py-4 rounded-xl flex-grow mx-4 flex justify-center">
-          <span className="text-white font-semibold text-xl">{currentPrediction.date}</span>
+          ))}
         </div>
-        
-        <button 
-          onClick={handleNext}
-          className="w-14 h-14 rounded-full bg-[#393959] flex items-center justify-center text-white hover:bg-indigo-600 transition-colors"
-          aria-label="Next date"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-          </svg>
-        </button>
       </div>
     </div>
   );
