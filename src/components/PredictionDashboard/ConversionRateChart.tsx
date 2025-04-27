@@ -1,12 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 interface ChartData {
   date: string;
   value: number;
   isHistorical?: boolean;
+  predictedValue?: number;
+  historicalValue?: number;
 }
 
 interface ConversionRateChartProps {
@@ -20,6 +22,72 @@ export const ConversionRateChart: React.FC<ConversionRateChartProps> = ({
   fromCurrency,
   toCurrency 
 }) => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const safeData = data && data.length > 0 ? data : [];
+  
+  // Find the current date (separating historical from future predictions)
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Add realistic volatility to prediction data while maintaining the trend
+  const enhancedChartData = useMemo(() => {
+    // If no data, return empty array
+    if (safeData.length === 0) return [];
+    
+    // Separate historical and predicted data
+    const historical = safeData.filter(d => d.isHistorical);
+    const predicted = safeData.filter(d => !d.isHistorical);
+    
+    // If we have historical data, calculate its volatility
+    let volatilityFactor = 0.001; // Default small volatility
+    
+    if (historical.length > 1) {
+      // Calculate the average daily change percentage in historical data
+      const changes = [];
+      for (let i = 1; i < historical.length; i++) {
+        const pctChange = Math.abs((historical[i].value - historical[i-1].value) / historical[i-1].value);
+        changes.push(pctChange);
+      }
+      
+      // Use the average historical volatility as our factor
+      const avgChange = changes.reduce((sum, val) => sum + val, 0) / changes.length;
+      volatilityFactor = avgChange * 0.5; // Scale down slightly to make predictions look smoother
+      
+      // Cap the volatility factor at reasonable bounds
+      volatilityFactor = Math.min(Math.max(volatilityFactor, 0.0005), 0.005);
+    }
+    
+    // Generate enhanced prediction data with controlled volatility
+    const enhancedPredicted = predicted.map((point, index) => {
+      // First prediction point should match exactly to ensure smooth transition
+      if (index === 0) return point;
+      
+      // Apply volatility - use the point's index to ensure consistent randomness
+      // Seed the random generator with the date string to ensure consistency
+      const seedValue = point.date.charCodeAt(0) + point.date.charCodeAt(1) + index;
+      const randomFactor = Math.sin(seedValue) * volatilityFactor;
+      
+      // Apply the volatility to create a "wiggly" effect without changing overall trend
+      return {
+        ...point,
+        predictedValue: point.value * (1 + randomFactor)
+      };
+    });
+    
+    // Combine the historical data with the enhanced predictions
+    return [
+      ...historical.map(item => ({
+        ...item,
+        predictedValue: item.isHistorical ? null : item.value,
+        historicalValue: item.isHistorical ? item.value : null
+      })),
+      ...enhancedPredicted.map(item => ({
+        ...item,
+        predictedValue: item.predictedValue || item.value,
+        historicalValue: null
+      }))
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [safeData]);
+  
   // Check if data is empty
   if (!data || data.length === 0) {
     return (
@@ -29,19 +97,9 @@ export const ConversionRateChart: React.FC<ConversionRateChartProps> = ({
     );
   }
   
-  // Find the current date (separating historical from future predictions)
-  const today = new Date().toISOString().split('T')[0];
-  
-  // Group data for better visualization
-  const chartData = data.map(item => ({
-    ...item,
-    predictedValue: item.isHistorical ? null : item.value,
-    historicalValue: item.isHistorical ? item.value : null
-  }));
-  
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={chartData}>
+      <LineChart data={enhancedChartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
         <XAxis 
           dataKey="date" 
