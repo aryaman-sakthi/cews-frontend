@@ -7,6 +7,7 @@ import { PredictionRateCard } from '@/components/PredictionDashboard/PredictionR
 import { VolatilityAnalysis } from '@/components/PredictionDashboard/VolatilityAnalysis';
 import { CorrelationHeatmap } from '@/components/PredictionDashboard/CorrelationHeatmap';
 import { AnomalyDetectionChart } from '@/components/PredictionDashboard/AnomalyDetectionChart';
+import PredictionAlertTile from '@/components/PredictionDashboard/PredictionAlertTile';
 import { scrollToElement } from '@/utils/scrollUtils';
 import { 
   fetchCurrencyPrediction, 
@@ -521,36 +522,92 @@ export default function PredictionsPage() {
               <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
             </div>
           ) : error ? (
-            <div className="bg-red-900/30 text-red-200 p-6 rounded-lg text-center my-12">
-              <div className="text-xl font-semibold mb-2">Error</div>
-              <div className="mb-4">{error}</div>
-              <button 
-                onClick={() => {
-                  setError(null);
-                  setLoading(true);
-                  fetchCurrencyPrediction(baseCurrency, targetCurrency, {
-                    forecastHorizon: 7,
-                    model: 'auto',
-                    refresh: true
-                  })
-                    .then(result => {
-                      // Force confidence score to be a number
-                      result.confidenceScore = Number(result.confidenceScore);
-                      console.log(`Retry button: Received prediction with confidence score: ${result.confidenceScore}`);
-                      setPrediction(result);
-                      setLoading(false);
-                    })
-                    .catch(err => {
-                      console.error('Error retrying prediction fetch:', err);
-                      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-                      setError(errorMessage);
-                      setLoading(false);
-                    });
-                }}
-                className="mt-4 bg-red-800 hover:bg-red-700 px-4 py-2 rounded-lg"
-              >
-                Try Again
-              </button>
+            <div className="bg-[#2a2a40] rounded-2xl p-6 text-center my-12">
+              <div className="flex flex-col items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-red-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="text-xl font-semibold mb-2 text-white">Prediction Error</div>
+                
+                {error.includes('timeout') || error.includes('Gateway') ? (
+                  <div className="mb-4 text-gray-300">
+                    <p className="mb-2">The prediction request timed out. This could be due to:</p>
+                    <ul className="text-left list-disc pl-5 mb-4">
+                      <li>High server load</li>
+                      <li>Complex prediction calculations for this currency pair</li>
+                      <li>Temporary network issues</li>
+                    </ul>
+                    <p>Try using the statistical model which is faster, or try again later.</p>
+                  </div>
+                ) : error.includes('500') ? (
+                  <div className="mb-4 text-gray-300">
+                    <p className="mb-2">The server encountered an error processing your request.</p>
+                    <p>This might be a temporary issue. Please try again with different settings.</p>
+                  </div>
+                ) : (
+                  <div className="mb-4 text-gray-300">{error}</div>
+                )}
+                
+                <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                  <button 
+                    onClick={() => {
+                      setError(null);
+                      setLoading(true);
+                      fetchCurrencyPrediction(baseCurrency, targetCurrency, {
+                        forecastHorizon: 7,
+                        model: 'auto',
+                        refresh: true,
+                        backtest: true
+                      })
+                        .then(result => {
+                          result.confidenceScore = Number(result.confidenceScore);
+                          setPrediction(result);
+                          setLoading(false);
+                        })
+                        .catch(err => {
+                          console.error('Error retrying prediction fetch:', err);
+                          const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+                          setError(errorMessage);
+                          setLoading(false);
+                        });
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-white"
+                  >
+                    Try Again
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      setError(null);
+                      setLoading(true);
+                      fetchCurrencyPrediction(baseCurrency, targetCurrency, {
+                        forecastHorizon: 7,
+                        model: 'statistical', // Use faster statistical model
+                        refresh: true,
+                        backtest: true
+                      })
+                        .then(result => {
+                          result.confidenceScore = Number(result.confidenceScore);
+                          setPrediction(result);
+                          setLoading(false);
+                        })
+                        .catch(err => {
+                          console.error('Error retrying prediction fetch with statistical model:', err);
+                          const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+                          setError(errorMessage);
+                          setLoading(false);
+                        });
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-white"
+                  >
+                    Try With Faster Model
+                  </button>
+                </div>
+                
+                <div className="mt-4 text-xs text-gray-400">
+                  If the issue persists, try a different currency pair or check back later.
+                </div>
+              </div>
             </div>
           ) : prediction ? (
             <>
@@ -601,6 +658,15 @@ export default function PredictionsPage() {
                     initialIndex={0}
                   />
                 </div>
+              </div>
+              
+              {/* Prediction Alert Tile */}
+              <div className="mb-8">
+                <PredictionAlertTile 
+                  baseCurrency={baseCurrency}
+                  targetCurrency={targetCurrency}
+                  predictedRates={prediction.predictionValues}
+                />
               </div>
             </>
           ) : null}
