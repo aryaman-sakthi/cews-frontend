@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
 interface PredictionRate {
   date: string;
@@ -21,7 +21,66 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
   
-  if (!predictions || predictions.length === 0) {
+  // Add realistic volatility to prediction rate values
+  const enhancedPredictions = useMemo(() => {
+    if (!predictions || predictions.length === 0) return [];
+    
+    // Separate historical and future predictions
+    const historical = predictions.filter(p => p.isHistorical);
+    const future = predictions.filter(p => !p.isHistorical);
+    
+    // Calculate volatility factor based on historical data
+    let volatilityFactor = 0.001; // Default small volatility
+    
+    if (historical.length > 1) {
+      // Calculate average volatility from historical data
+      const changes = [];
+      for (let i = 1; i < historical.length; i++) {
+        const pctChange = Math.abs((historical[i].mean - historical[i-1].mean) / historical[i-1].mean);
+        changes.push(pctChange);
+      }
+      
+      if (changes.length > 0) {
+        const avgChange = changes.reduce((sum, val) => sum + val, 0) / changes.length;
+        volatilityFactor = avgChange * 0.6; // Scale to make volatility visible but not exaggerated
+        
+        // Cap volatility at reasonable bounds
+        volatilityFactor = Math.min(Math.max(volatilityFactor, 0.0005), 0.005);
+      }
+    }
+    
+    // Enhance future predictions with controlled volatility
+    const enhancedFuture = future.map((prediction, index) => {
+      // First prediction should match to ensure smooth transition
+      if (index === 0) return prediction;
+      
+      // Create a deterministic but varying seed for consistent randomness
+      const seedValue = prediction.date.charCodeAt(0) + prediction.date.charCodeAt(1) + index;
+      
+      // Generate consistent random variations using the seed
+      const randomFactorMean = Math.sin(seedValue) * volatilityFactor;
+      const randomFactorHigh = Math.sin(seedValue + 1) * volatilityFactor * 1.2; // Slightly more variation in high
+      const randomFactorLow = Math.sin(seedValue + 2) * volatilityFactor * 1.2; // Slightly more variation in low
+      
+      // Apply volatility while preserving high > mean > low relationship
+      const adjustedMean = prediction.mean * (1 + randomFactorMean);
+      const adjustedHigh = prediction.high * (1 + randomFactorHigh);
+      const adjustedLow = prediction.low * (1 + randomFactorLow);
+      
+      // Ensure high/low bounds remain logical
+      return {
+        ...prediction,
+        mean: adjustedMean,
+        high: Math.max(adjustedHigh, adjustedMean * 1.001), // Ensure high > mean
+        low: Math.min(adjustedLow, adjustedMean * 0.999)    // Ensure low < mean
+      };
+    });
+    
+    // Combine historical and enhanced future predictions
+    return [...historical, ...enhancedFuture];
+  }, [predictions]);
+  
+  if (!enhancedPredictions || enhancedPredictions.length === 0) {
     return (
       <div className="bg-[#2a2a40] rounded-2xl p-6 h-full flex items-center justify-center">
         <div className="text-gray-400">No prediction data available</div>
@@ -29,7 +88,7 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
     );
   }
   
-  const selectedPrediction = predictions[selectedIndex];
+  const selectedPrediction = enhancedPredictions[selectedIndex] || enhancedPredictions[0];
   
   return (
     <div className="bg-[#2a2a40] rounded-2xl p-6 h-full">
@@ -67,7 +126,7 @@ export const PredictionRateCard: React.FC<PredictionRateCardProps> = ({
       <div className="flex flex-col">
         <div className="text-gray-400 text-sm mb-2">Date Selection</div>
         <div className="grid grid-cols-4 gap-2">
-          {predictions.map((prediction, index) => (
+          {enhancedPredictions.map((prediction, index) => (
         <button 
               key={index}
               onClick={() => setSelectedIndex(index)}

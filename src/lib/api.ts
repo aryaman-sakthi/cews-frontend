@@ -269,6 +269,25 @@ export interface VolatilityData {
   period_days: number;
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const { signal } = controller;
+  
+  // Create a timeout that aborts the fetch
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  
+  try {
+    const response = await fetch(url, { ...options, signal });
+    clearTimeout(timeout);
+    return response;
+  } catch (error) {
+    clearTimeout(timeout);
+    throw error;
+  }
+}
+
 export const fetchCurrencyPrediction = async (
   fromCurrency: string, 
   toCurrency: string, 
@@ -311,60 +330,114 @@ export const fetchCurrencyPrediction = async (
     
     // Use the proxy API route to avoid CORS issues
     console.log(`Fetching prediction data for ${fromCurrency}/${toCurrency}`);
-    const response = await fetch(`/api/prediction?${queryParams.toString()}`);
     
-    if (!response.ok) {
-      throw new Error(`Error fetching prediction: ${response.status}`);
+    // Implement retry logic
+    const maxRetries = 3;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        // Use timeout 45 seconds for first try, then reduce for retries
+        // For retries, switch to statistical model which is faster
+        const timeout = retryCount === 0 ? 45000 : 30000;
+        
+        // If it's a retry, force statistical model which is faster
+        if (retryCount > 0) {
+          queryParams.set('model', 'statistical');
+          console.log(`Retry ${retryCount}/${maxRetries} with statistical model...`);
+        }
+        
+        const response = await fetchWithTimeout(
+          `/api/prediction?${queryParams.toString()}`,
+          {
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          },
+          timeout
+        );
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          // If status is 504 (Gateway Timeout), we'll retry
+          if (response.status === 504) {
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.log(`Gateway timeout received, retrying (${retryCount}/${maxRetries})...`);
+              continue;
+            }
+          }
+          throw new Error(`Error fetching prediction: ${response.status} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Extract the first event from the ADAGE response
+        const event = data.events[0];
+        const attributes = event.attributes;
+        
+        // Log all attributes for debugging
+        console.log('All prediction attributes:', attributes);
+        
+        // Specifically check confidence_score value
+        console.log(`Confidence score in attributes: ${attributes.confidence_score}, type: ${typeof attributes.confidence_score}`);
+        
+        // Check for backtest data in the attributes
+        const backtest_values = attributes.backtest_values || [];
+        
+        // Add historical flag to backtest values
+        const backtestValuesWithFlag = backtest_values.map((value: PredictionValue) => ({
+          ...value,
+          isHistorical: true
+        }));
+        
+        // Add future flag to prediction values
+        const predictionValuesWithFlag = attributes.prediction_values.map((value: PredictionValue) => ({
+          ...value,
+          isHistorical: false
+        }));
+        
+        // Transform to our frontend model
+        const prediction = {
+          baseCurrency: attributes.base_currency,
+          targetCurrency: attributes.target_currency,
+          currentRate: attributes.current_rate,
+          changePercent: attributes.change_percent,
+          confidenceScore: Number(attributes.confidence_score),
+          modelVersion: attributes.model_version,
+          inputDataRange: attributes.input_data_range,
+          influencingFactors: attributes.influencing_factors,
+          predictionValues: predictionValuesWithFlag,
+          meanSquareError: attributes.mean_square_error,
+          rootMeanSquareError: attributes.root_mean_square_error,
+          meanAbsoluteError: attributes.mean_absolute_error,
+          backtestValues: backtestValuesWithFlag
+        };
+        
+        // Log the transformed prediction object
+        console.log(`Returning prediction with confidence score: ${prediction.confidenceScore}`);
+        
+        return prediction;
+      } catch (error: unknown) {
+        if (
+          (error instanceof Error && error.name === 'AbortError') || 
+          (error instanceof Error && error.message && error.message.includes('Gateway'))
+        ) {
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.log(`Request timed out, retrying (${retryCount}/${maxRetries})...`);
+            // Wait a bit before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+        }
+        // Other errors or max retries reached - propagate error
+        throw error;
+      }
     }
     
-    const data = await response.json();
-    
-    // Extract the first event from the ADAGE response
-    const event = data.events[0];
-    const attributes = event.attributes;
-    
-    // Log all attributes for debugging
-    console.log('All prediction attributes:', attributes);
-    
-    // Specifically check confidence_score value
-    console.log(`Confidence score in attributes: ${attributes.confidence_score}, type: ${typeof attributes.confidence_score}`);
-    
-    // Check for backtest data in the attributes
-    const backtest_values = attributes.backtest_values || [];
-    
-    // Add historical flag to backtest values
-    const backtestValuesWithFlag = backtest_values.map((value: PredictionValue) => ({
-      ...value,
-      isHistorical: true
-    }));
-    
-    // Add future flag to prediction values
-    const predictionValuesWithFlag = attributes.prediction_values.map((value: PredictionValue) => ({
-      ...value,
-      isHistorical: false
-    }));
-    
-    // Transform to our frontend model
-    const prediction = {
-      baseCurrency: attributes.base_currency,
-      targetCurrency: attributes.target_currency,
-      currentRate: attributes.current_rate,
-      changePercent: attributes.change_percent,
-      confidenceScore: Number(attributes.confidence_score),
-      modelVersion: attributes.model_version,
-      inputDataRange: attributes.input_data_range,
-      influencingFactors: attributes.influencing_factors,
-      predictionValues: predictionValuesWithFlag,
-      meanSquareError: attributes.mean_square_error,
-      rootMeanSquareError: attributes.root_mean_square_error,
-      meanAbsoluteError: attributes.mean_absolute_error,
-      backtestValues: backtestValuesWithFlag
-    };
-    
-    // Log the transformed prediction object
-    console.log(`Returning prediction with confidence score: ${prediction.confidenceScore}`);
-    
-    return prediction;
+    throw new Error('Maximum retries exceeded');
   } catch (error) {
     console.error('Error fetching prediction:', error);
     throw error;
@@ -757,7 +830,7 @@ export const fetchHistoricalExchangeRate = async (
   toCurrency: string
 ): Promise<HistoricalDataPoint[]> => {
   try {
-    const url = `https://foresight-backend-v2.devkitty.pro/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const url = `https://foresight-backend-v2.devkitty.pro/api/v2/currency/rates/${fromCurrency}/${toCurrency}/historical`;
     const response = await axios.post(url);
     console.log(response);
 
