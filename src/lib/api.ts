@@ -1,3 +1,5 @@
+import axios from "axios";
+
 /**
  * Fetches the current exchange rate between two currencies
  */
@@ -55,6 +57,158 @@ export interface CurrencyPrediction {
   meanAbsoluteError?: number;
   backtestValues?: PredictionValue[];
 }
+interface HistoricalDataPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  backtestValues?: PredictionValue[];
+}
+
+// Interface for Currency News Articles
+export interface NewsArticle {
+  title: string;
+  source: string;
+  url: string;
+  summary: string;
+  sentiment_score: number;
+  sentiment_label: string;
+  currency: string;
+}
+
+// Interface for Currency News API Response (ADAGE 3.0 format from Django backend)
+export interface CurrencyNewsResponse {
+  data_source: string;
+  dataset_type: string;
+  dataset_id: string;
+  time_object: {
+    timestamp: string;
+    timezone: string;
+  };
+  events: Array<{
+    time_object: {
+      timestamp: string;
+      duration: number;
+      duration_unit: string;
+      timezone: string;
+    };
+    event_type: string;
+    event_id: string;
+    attributes: {
+      title: string;
+      source: string;
+      url: string;
+      summary: string;
+      sentiment_score: number;
+      sentiment_label: string;
+      currency: string;
+    };
+  }>;
+}
+
+// Fetch currency news for a specific currency (one currency at a time)
+export const fetchCurrencyNews = async (
+  currency: string,
+  limit: number = 10,
+  sentimentScore?: number
+): Promise<NewsArticle[]> => {
+  try {
+    console.log(`Fetching news for currency: ${currency}, limit: ${limit}`);
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    queryParams.append('currency', currency);
+    queryParams.append('limit', limit.toString());
+    
+    if (sentimentScore !== undefined) {
+      queryParams.append('sentiment_score', sentimentScore.toString());
+    }
+    
+    // Use the proxy API route to avoid CORS issues
+    const response = await fetch(`/api/currency-news?${queryParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching currency news: ${response.status}`);
+    }
+    
+    const data: CurrencyNewsResponse = await response.json();
+    
+    // Process the news data from ADAGE format
+    if (data.events && data.events.length > 0) {
+      return data.events.map(event => ({
+        title: event.attributes.title,
+        source: event.attributes.source,
+        url: event.attributes.url,
+        summary: event.attributes.summary,
+        sentiment_score: event.attributes.sentiment_score,
+        sentiment_label: event.attributes.sentiment_label,
+        currency: event.attributes.currency
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`Failed to fetch currency news for ${currency}:`, error);
+    throw error;
+  }
+};
+
+// Fetch news for a currency pair (by making two separate requests)
+export const fetchCurrencyPairNews = async (
+  fromCurrency: string,
+  toCurrency: string,
+  limit: number = 3
+): Promise<NewsArticle[]> => {
+  try {
+    console.log(`Fetching news for currency pair: ${fromCurrency}/${toCurrency}`);
+    
+    // Make two separate requests for each currency
+    const [fromNewsResponse, toNewsResponse] = await Promise.all([
+      fetch(`/api/currency-news?currency=${fromCurrency}&limit=${limit}`),
+      fetch(`/api/currency-news?currency=${toCurrency}&limit=${limit}`)
+    ]);
+    
+    // Check if either request failed
+    if (!fromNewsResponse.ok || !toNewsResponse.ok) {
+      const errorStatus = !fromNewsResponse.ok ? 
+        fromNewsResponse.status : toNewsResponse.status;
+      throw new Error(`Error fetching currency news: ${errorStatus}`);
+    }
+    
+    // Parse both responses
+    const fromData: CurrencyNewsResponse = await fromNewsResponse.json();
+    const toData: CurrencyNewsResponse = await toNewsResponse.json();
+    
+    // Combine events from both responses
+    const combinedEvents = [
+      ...(fromData.events || []),
+      ...(toData.events || [])
+    ];
+    
+    // Sort by timestamp, newest first
+    combinedEvents.sort((a, b) => {
+      return new Date(b.time_object.timestamp).getTime() - 
+             new Date(a.time_object.timestamp).getTime();
+    });
+    
+    // Convert to NewsArticle format
+    const articles = combinedEvents.map(event => ({
+      title: event.attributes.title,
+      source: event.attributes.source,
+      url: event.attributes.url,
+      summary: event.attributes.summary,
+      sentiment_score: event.attributes.sentiment_score,
+      sentiment_label: event.attributes.sentiment_label,
+      currency: event.attributes.currency
+    }));
+    
+    return articles;
+  } catch (error) {
+    console.error(`Failed to fetch news for currency pair ${fromCurrency}/${toCurrency}:`, error);
+    throw error;
+  }
+};
 
 // New interface for Volatility Analysis
 export interface VolatilityAnalysis {
@@ -670,3 +824,43 @@ export const fetchVolatilityData = async (
     throw error;
   }
 }; 
+
+export const fetchHistoricalExchangeRate = async (
+  fromCurrency: string,
+  toCurrency: string
+): Promise<HistoricalDataPoint[]> => {
+  try {
+    const url = `https://foresight-backend-v2.devkitty.pro/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const response = await axios.post(url);
+    console.log(response);
+
+
+    // Ensure the data is available
+    const timeSeriesData = response.data?.event?.[0]?.attributes?.data;
+
+    if (!timeSeriesData) {
+      throw new Error('Invalid data format received from API');
+    }
+
+    // Map and format the data to HistoricalDataPoint array
+    const formattedData: HistoricalDataPoint[] = timeSeriesData.map(
+      (entry: { date: string; open: number; high: number; low: number; close: number }) => ({
+        date: entry.date,
+        open: entry.open,
+        high: entry.high,
+        low: entry.low,
+        close: entry.close,
+      })
+    );
+    
+
+    // Sort chronologically (oldest to newest)
+    formattedData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return formattedData;
+  } catch (error) {
+    console.error('Error fetching historical data:', error);
+    throw error;
+  }
+};
+
