@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
           apiParams.set('model', 'statistical');
           
           // Build new URL with statistical model
-          const fallbackUrl = `http://localhost:8000/api/v2/analytics/prediction/${from}/${to}?${apiParams.toString()}`;
+          const fallbackUrl = `https://cews-backend.onrender.com/api/v2/analytics/prediction/${from}/${to}?${apiParams.toString()}`;
           console.log(`Retrying with statistical model: ${fallbackUrl}`);
           
           // Try with a shorter timeout
