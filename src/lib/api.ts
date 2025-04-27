@@ -537,7 +537,7 @@ export const fetchHistoricalExchangeRate = async (
   toCurrency: string
 ): Promise<HistoricalDataPoint[]> => {
   try {
-    const url = `${API_BASE_URL}/api/v1/currency/rates/${fromCurrency}/${toCurrency}/historical`;
+    const url = `${API_BASE_URL}/api/v2/currency/rates/${fromCurrency}/${toCurrency}/historical`;
     const response = await axios.post(url);
     console.log(response);
 
